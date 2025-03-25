@@ -31,10 +31,28 @@ export class Game {
         });
     }
 
+    assignTeam() {
+        // Count players on each team
+        let redCount = 0;
+        let blueCount = 0;
+        
+        this.players.forEach(player => {
+            if (player.team === 'red') redCount++;
+            if (player.team === 'blue') blueCount++;
+        });
+        
+        // Assign to team with fewer players
+        return redCount <= blueCount ? 'red' : 'blue';
+    }
+
     init() {
         this.keys = {};
         this.map = new GameMap();
-        this.localPlayer = new Player(undefined, undefined, this.map);
+        
+        // Assign team to local player
+        const team = this.assignTeam();
+        this.localPlayer = new Player(undefined, undefined, this.map, team);
+        
         this.players = new Map();
         this.players.set(this.localPlayer.id, this.localPlayer);
         this.camera = new Camera(this.canvas, this.map);
