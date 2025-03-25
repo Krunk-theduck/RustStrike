@@ -1,0 +1,112 @@
+body {
+    margin: 0;
+    padding: 0;
+    background: #1a1a1a;
+    color: #fff;
+    font-family: Arial, sans-serif;
+    height: 100vh;
+    overflow: hidden;
+}
+
+#game-container {
+    position: relative;
+}
+
+#gameCanvas {
+    background: #000;
+}
+
+#ui-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+
+.hidden {
+    display: none !important;
+}
+
+#room-controls {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: auto;
+}
+
+.screen {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.menu-container {
+    background: rgba(0, 0, 0, 0.8);
+    padding: 2rem;
+    border-radius: 10px;
+    text-align: center;
+}
+
+.menu-button {
+    display: block;
+    width: 200px;
+    padding: 1rem;
+    margin: 1rem auto;
+    background: #4a4a4a;
+    border: none;
+    border-radius: 5px;
+    color: white;
+    font-size: 1.1rem;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+
+.menu-button:hover {
+    background: #666;
+}
+
+.setting-item {
+    margin: 1rem 0;
+    text-align: left;
+}
+
+.setting-item label {
+    display: block;
+    margin-bottom: 0.5rem;
+}
+
+.setting-item input {
+    width: 100%;
+}
+
+#room-code {
+    padding: 0.5rem;
+    font-size: 1.2rem;
+    text-align: center;
+    margin-bottom: 1rem;
+    width: 200px;
+}
+
+.back-button {
+    padding: 0.5rem 1rem;
+    background: #333;
+    border: none;
+    border-radius: 5px;
+    color: white;
+    cursor: pointer;
+}
+
+#game-container .back-button {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    z-index: 100;
+} 
