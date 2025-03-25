@@ -1,117 +1,149 @@
 Game Overview: Rust Strike
-Rust Strike is a simple, top-down multiplayer shooting game with team-based gameplay. Players can host or join rooms and engage in combat with smooth movement and collision mechanics. Maps are procedurally generated with team spawn points and a central objective area. The game features a clean, minimalist design focused on tactical gameplay rather than complex graphics or sound.
+Rust Strike is a tactical multiplayer shooting game with team-based gameplay, focusing on objective-based rounds similar to CS:GO. Players can host or join rooms and engage in combat with smooth movement and collision mechanics. Maps are procedurally generated with team spawn points and a central objective area. The game features a clean, minimalist design focused on tactical gameplay rather than complex graphics or sound.
 
 Current Implementation Status:
 ✓ Basic Multiplayer Setup
 - Firebase Realtime Database integration
 - Room hosting and joining system
-- Proper player synchronization (20 updates per second)
-- Team-based player assignment (auto-balancing)
-- Clean disconnection handling (both tab close and exit button)
+- Player synchronization (20 updates per second)
+- Team-based player assignment
+- Clean disconnection handling
+- Robust error handling for player data synchronization
 
 ✓ Basic Movement System
 - Smooth, non-grid-based movement
-- Proper collision detection with walls
-- Player position synchronization across clients
+- Proper collision detection
+- Position synchronization
+- Player aim and direction synchronization
 
 ✓ Map System
-- Procedurally generated maps with varied room sizes and hallways
-- Team-based spawn points (red and blue)
+- Procedural generation
+- Team spawn points
 - Central objective area
-- Minimum room count to ensure interesting layouts
 - Wall collision detection
+- Safe spawn point detection
 
-Next Development Phases:
+✓ Round System (Phase 1) - Core Structure
+- Round state management (WAITING, PREP, ACTIVE, END)
+- Round timer system
+- State transitions
+- Player movement restrictions during phases
+- Game flow control
 
-1. Game Rounds System
-- Implement round-based gameplay
-- Add round start/end conditions
-- Score tracking
-- Round timer implementation
-- Round reset functionality
+✓ Field of View System
+- Tile-based raycasting
+- Performance-optimized visibility calculations
+- Fog of war rendering
+- Adaptive ray count based on performance
 
-2. Combat System
-- Implement shooting mechanics
-- Add different weapon types
-- Bullet physics and collision
-- Damage system
-- Health management
-- Death and respawn mechanics
+✓ Combat System
+- Weapon system with different gun types
+- Bullet mechanics and hit detection
+- Damage system and player health synchronization
+- Weapon switching and ammo management
+- Visual feedback (bullet trails, damage indicators)
+- Kill notifications and rewards
 
-3. Economy System
-- Add in-game currency
-- Buy menu implementation
-- Weapon and equipment purchasing
-- Round-based economy rules
-- Save/load loadout preferences
+Current Features:
+1. Weapon System
+   - Primary and secondary weapon categories
+   - Weapon properties: damage, range, accuracy, fire rate, magazine size
+   - Ammo management with reload mechanics
+   - Damage falloff based on distance
+   - Visual effects for shooting and hits
+   - Kills reward players with in-game currency
 
-4. Visual Improvements
-- Add proper textures for walls and floor
-- Player character sprites/animations
-- Weapon animations
-- Particle effects for shooting/hits
-- Map visibility system using ray tracing
-- UI improvements for game state
+2. Player Data Synchronization
+   - Position, health, and aim direction synced between clients
+   - Optimized networking with normalized data structures
+   - Robust error handling for disconnects and state changes
+   - Health synchronization during combat
 
-5. Map System Enhancement
-- Create proper map editor
-- Add different map types
-- Implement map voting system
-- Add map-specific features (doors, windows, etc.)
-- Optimize map rendering
+3. Combat Mechanics
+   - Raycasting for bullet trajectory and hit detection
+   - Player hitboxes with accurate collision
+   - Client-authoritative damage calculations with server validation
+   - Visual feedback for damage taken and dealt
 
-6. Cosmetic System
-- Player skins
-- Weapon skins
-- Animation effects
-- Custom player cards
-- Achievement system
+4. Round System
+   - Preparation phase with movement restrictions
+   - Active combat phase
+   - Round end phase with results
+   - Automatic transitions between phases
 
-7. Game Modes
-- Deathmatch
-- Team Deathmatch
-- Objective-based modes
-- Custom game settings
+5. Game Flow
+   - Team-based spawning
+   - Automatic respawn with default equipment at round start
+   - Clear visual indications of game state
 
-8. Social Features
-- Friend system
-- Party system
-- Chat system
-- Quick emotes/commands
-- Player statistics
+Next Implementation Plan:
 
-9. Polish & Optimization
-- Performance improvements
-- Network optimization
-- Anti-cheat measures
-- Better error handling
-- Loading screens
-- Match history
+1. Buy Phase Implementation
+   - UI overlay during preparation phase
+   - Weapon selection and purchasing
+   - Equipment persistence between rounds
+   - Implementation order:
+     a. Create buy menu UI component
+     b. Add weapon selection options
+     c. Connect with money system
+     d. Implement equipment persistence
 
-Technical Implementation Notes:
-- Currently using Firebase Realtime Database for real-time updates
-- Player positions update at 20Hz to balance responsiveness and network load
-- Team-based spawn system with auto-balancing
-- Room management includes proper cleanup on both normal exit and disconnection
-- Movement system uses delta time for smooth animation
-- Collision system checks player corners for accurate wall detection
-- Map generation creates varied layouts with minimum room count guarantees
+2. Objective System
+   - Bomb mechanics
+   - Plant/defuse zones
+   - Win conditions
+   - Implementation order:
+     a. Add bomb item to attacker team
+     b. Create plant zones near attacker areas
+     c. Implement planting/defusing mechanics
+     d. Add bomb timer
+     e. Implement win condition checks
 
-Firebase Security Rules:
-- Room creation limited to prevent abuse
-- Players can only modify their own data
-- Room cleanup handled automatically on host disconnect
-- Proper data validation and sanitization
+3. UI Improvements
+   - Scoreboard showing team scores and player stats
+   - Kill feed
+   - Round timer and state indicators
+   - Team indicators and minimap
 
-Next Immediate Steps:
-1. Implement basic shooting mechanics
-2. Add health system
-3. Create round system
-4. Design buy menu UI
-5. Add basic weapon types
-6. Implement proper textures
-7. Create proper map generation/selection system
+Technical Implementation Details:
+1. Firebase Database Structure:
+   - rooms/{roomCode}
+     - players/{playerId}: Player data including position, health, equipment
+     - round: Round state, timer, and team scores
+     - shots: Transient shot data
+     - damage: Transient damage events
+     - hostPosition: Host player's position (for host presence detection)
 
+2. Player Synchronization:
+   - Position updates every 50ms
+   - Aim direction updates on significant changes
+   - Health updates immediately after damage
+   - Equipment updates on weapon changes
 
-ISSUES:
-clients joining recieve team NULL
+3. Normalized Data Structure:
+   - Players use normalizeForSync() to create clean data objects
+   - Equipment syncing avoids circular references
+   - Error handling prevents null reference errors
+
+4. Weapon System:
+   - Weapons defined in WeaponCatalog
+   - Instance-based weapon objects with state
+   - Network-safe reconstruction of weapon data
+
+5. Optimizations:
+   - Adaptive raycasting for visibility calculations
+   - Minimal network traffic with targeted updates
+   - Cleaned up transient data (shots, damage events)
+   - Robust error handling for all network operations
+
+Known Issues and Future Improvements:
+1. Add proper team balancing
+2. Enhance weapon recoil patterns
+3. Add proper spectator mode
+4. Implement death animations
+5. Add sound effects for gameplay actions
+6. Create more detailed map decorations
+7. Optimize for mobile devices
+
+Credits:
+RustStrike is a web-based tactical shooter created as a demonstration of modern web game development techniques using JavaScript and Firebase.

@@ -17,6 +17,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const ui = new UIManager(game);
     ui.init();
 
+    // Make UI accessible to game
+    game.ui = ui;
+
     // Make game accessible for debugging
     window.game = game;
 }); 

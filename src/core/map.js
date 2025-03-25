@@ -1,64 +1,118 @@
 export class Map {
     constructor() {
         this.tileSize = 32; // pixels per tile
-        this.tiles = this.generateMap();
+        
+        // Initialize all properties before generating map
         this.teamSpawns = {
             red: { x: 0, y: 0 },
             blue: { x: 0, y: 0 }
         };
+        
+        this.rooms = {
+            redSpawn: null,
+            blueSpawn: null,
+            center: null,
+            bombSite: null // Add bomb site room reference
+        };
+        
+        this.decorations = null; // Will initialize after map generation
+        this.tiles = this.generateMap();
+        
+        // Initialize decorations array after we have tile dimensions
+        this.decorations = Array(this.tiles.length).fill().map(() => 
+            Array(this.tiles[0].length).fill(null)
+        );
+        
+        // Now decorate the rooms after everything is initialized
+        if (this.rooms.redSpawn) this.decorateRoom(this.rooms.redSpawn, 'red');
+        if (this.rooms.blueSpawn) this.decorateRoom(this.rooms.blueSpawn, 'blue');
+        if (this.rooms.bombSite) this.decorateRoom(this.rooms.bombSite, 'bombsite');
+        
+        // Debug log to verify spawn points after map generation
+        console.log('Final team spawns after map generation:', {
+            red: { ...this.teamSpawns.red },
+            blue: { ...this.teamSpawns.blue }
+        });
     }
 
     generateMap() {
-        const width = 100;  // Increased from 50 to 100
-        const height = 100; // Increased from 50 to 100
-        const map = Array(height).fill().map(() => Array(width).fill(1)); // Start with all walls
+        const width = 100;
+        const height = 100;
+        const map = Array(height).fill().map(() => Array(width).fill(1));
+        
+        // Track all rooms for wall generation
+        const allRooms = [];
 
         // Generate central objective room
         const centerRoom = this.generateRoom(
-            Math.floor(width/2 - 10),  // Larger center room
+            Math.floor(width/2 - 10),
             Math.floor(height/2 - 10),
-            20,  // Increased size for central objective room
+            20,
             20,
             map
         );
+        this.rooms.center = centerRoom;
+        allRooms.push(centerRoom);
 
         // Generate team spawn rooms on opposite sides
         const redSpawnRoom = this.generateRoom(
             Math.floor(width * 0.15),
             Math.floor(height * 0.15),
-            12,  // Increased spawn room size
+            12,
             12,
             map
         );
+        this.rooms.redSpawn = redSpawnRoom;
+        allRooms.push(redSpawnRoom);
         
         const blueSpawnRoom = this.generateRoom(
             Math.floor(width * 0.75),
             Math.floor(height * 0.75),
-            12,  // Increased spawn room size
+            12,
             12,
             map
         );
+        this.rooms.blueSpawn = blueSpawnRoom;
+        allRooms.push(blueSpawnRoom);
 
-        // Store team spawn points
-        this.teamSpawns = {
-            red: { 
-                x: redSpawnRoom.x + Math.floor(redSpawnRoom.width/2) * this.tileSize, 
-                y: redSpawnRoom.y + Math.floor(redSpawnRoom.height/2) * this.tileSize 
-            },
-            blue: { 
-                x: blueSpawnRoom.x + Math.floor(blueSpawnRoom.width/2) * this.tileSize, 
-                y: blueSpawnRoom.y + Math.floor(blueSpawnRoom.height/2) * this.tileSize 
-            }
+        // Update team spawn points - center of the spawn rooms
+        const redSpawn = { 
+            x: (redSpawnRoom.x + Math.floor(redSpawnRoom.width/2)) * this.tileSize, 
+            y: (redSpawnRoom.y + Math.floor(redSpawnRoom.height/2)) * this.tileSize 
         };
+        const blueSpawn = { 
+            x: (blueSpawnRoom.x + Math.floor(blueSpawnRoom.width/2)) * this.tileSize, 
+            y: (blueSpawnRoom.y + Math.floor(blueSpawnRoom.height/2)) * this.tileSize 
+        };
+
+        // Update the instance variable directly
+        this.teamSpawns.red = redSpawn;
+        this.teamSpawns.blue = blueSpawn;
+
+        console.log('Team spawns calculated during map generation:', {
+            red: { ...redSpawn },
+            blue: { ...blueSpawn }
+        });
 
         // Connect spawn rooms to center
         this.generateHallway(redSpawnRoom, centerRoom, map);
         this.generateHallway(blueSpawnRoom, centerRoom, map);
 
+        // Generate bomb site room - a large room near the red spawn (attackers)
+        // We'll try to place it somewhere between the red spawn and center
+        const bombSiteRoom = this.generateBombSiteRoom(redSpawnRoom, centerRoom, map);
+        if (bombSiteRoom) {
+            this.rooms.bombSite = bombSiteRoom;
+            allRooms.push(bombSiteRoom);
+            // Connect bomb site to both red spawn and center
+            this.generateHallway(redSpawnRoom, bombSiteRoom, map);
+            this.generateHallway(centerRoom, bombSiteRoom, map);
+        }
+
         const rooms = [centerRoom, redSpawnRoom, blueSpawnRoom];
-        const minRooms = 15;  // Increased minimum rooms
-        const maxRooms = 25;  // Increased maximum rooms
-        const attempts = maxRooms * 4;  // More attempts for larger map
+        const minRooms = 15;
+        const maxRooms = 25;
+        const attempts = maxRooms * 4;
 
         // Generate additional rooms
         for (let i = 0; i < attempts && rooms.length < maxRooms; i++) {
@@ -71,9 +125,7 @@ export class Map {
                 [-1, 0]   // West
             ][direction];
 
-            // Spacing variation (0-10) - increased for larger map
             const hallwayLength = Math.floor(Math.random() * 11);
-            // Room size variation (6-18) - increased size range
             const roomWidth = Math.floor(Math.random() * 13) + 6;
             const roomHeight = Math.floor(Math.random() * 13) + 6;
 
@@ -83,6 +135,7 @@ export class Map {
             if (this.canPlaceRoom(newX, newY, roomWidth, roomHeight, map)) {
                 const newRoom = this.generateRoom(newX, newY, roomWidth, roomHeight, map);
                 rooms.push(newRoom);
+                allRooms.push(newRoom);
                 this.generateHallway(sourceRoom, newRoom, map);
             }
         }
@@ -103,9 +156,7 @@ export class Map {
                         [-1, 0]   // West
                     ][direction];
 
-                    // Shorter hallways to fit more rooms
                     const hallwayLength = Math.floor(Math.random() * 6);
-                    // Smaller rooms to fit more
                     const roomWidth = Math.floor(Math.random() * 6) + 6;
                     const roomHeight = Math.floor(Math.random() * 6) + 6;
 
@@ -115,6 +166,7 @@ export class Map {
                     if (this.canPlaceRoom(newX, newY, roomWidth, roomHeight, map)) {
                         const newRoom = this.generateRoom(newX, newY, roomWidth, roomHeight, map);
                         rooms.push(newRoom);
+                        allRooms.push(newRoom);
                         this.generateHallway(sourceRoom, newRoom, map);
                         break;
                     }
@@ -124,6 +176,12 @@ export class Map {
 
         // Add some random connections between nearby rooms
         this.addExtraConnections(rooms, map);
+        
+        // Now add walls around all rooms and hallways
+        this.addWallsAroundOpenAreas(map);
+        
+        // Store the walkable areas for efficient collision detection
+        this.buildSpatialIndex(map);
 
         return map;
     }
@@ -220,18 +278,210 @@ export class Map {
     }
 
     isWalkable(x, y) {
-        return this.getTile(Math.floor(x / this.tileSize), Math.floor(y / this.tileSize)) === 0;
+        // Convert to tile coordinates
+        const tileX = Math.floor(x / this.tileSize);
+        const tileY = Math.floor(y / this.tileSize);
+        
+        // Quick check using the tile map
+        if (tileX < 0 || tileX >= this.tiles[0].length || tileY < 0 || tileY >= this.tiles.length) {
+            return false; // Out of bounds
+        }
+        
+        return this.tiles[tileY][tileX] === 0;
     }
 
     getSpawnPoint(team) {
+        console.log(`Getting spawn point for team: ${team}`);
+        console.log('Current team spawns:', JSON.stringify(this.teamSpawns));
+        
         if (team === 'red' || team === 'blue') {
-            return this.teamSpawns[team];
+            // Get the base spawn point for the team
+            const spawnPoint = this.teamSpawns[team];
+            console.log(`Base spawn point for ${team} team:`, JSON.stringify(spawnPoint));
+            
+            // Add a small random offset within the spawn area (2 tiles in any direction)
+            const offsetX = (Math.random() * 2 - 1) * this.tileSize * 2;
+            const offsetY = (Math.random() * 2 - 1) * this.tileSize * 2;
+            
+            const finalSpawn = {
+                x: spawnPoint.x + offsetX,
+                y: spawnPoint.y + offsetY
+            };
+            
+            console.log(`Final spawn position with offset:`, JSON.stringify(finalSpawn));
+            return finalSpawn;
         }
         
         // For neutral/spectator, return center of map
-        return {
+        const centerSpawn = {
             x: (this.tiles[0].length / 2) * this.tileSize,
             y: (this.tiles.length / 2) * this.tileSize
         };
+        console.log('Using center spawn point:', JSON.stringify(centerSpawn));
+        return centerSpawn;
     }
-} 
+
+    // New method to add walls only around open areas
+    addWallsAroundOpenAreas(map) {
+        const height = map.length;
+        const width = map[0].length;
+        
+        // Create a copy of the map to work with
+        const newMap = Array(height).fill().map((_, y) => Array(width).fill(0));
+        
+        // For each floor tile, check if it needs a wall around it
+        for (let y = 0; y < height; y++) {
+            for (let x = 0; x < width; x++) {
+                // If it's a floor tile, keep it as floor
+                if (map[y][x] === 0) {
+                    newMap[y][x] = 0;
+                    
+                    // Check 8 surrounding tiles and add walls if they're empty
+                    for (let dy = -1; dy <= 1; dy++) {
+                        for (let dx = -1; dx <= 1; dx++) {
+                            if (dx === 0 && dy === 0) continue; // Skip the center
+                            
+                            const nx = x + dx;
+                            const ny = y + dy;
+                            
+                            // If out of bounds or not a floor tile, add a wall
+                            if (nx < 0 || nx >= width || ny < 0 || ny >= height) {
+                                continue; // Skip out of bounds
+                            }
+                            
+                            // If this is empty space (not a floor), mark it as a wall
+                            if (map[ny][nx] === 0) {
+                                // Skip, it's already a floor
+                            } else {
+                                newMap[ny][nx] = 1; // Add wall
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Copy the new map back to the original
+        for (let y = 0; y < height; y++) {
+            for (let x = 0; x < width; x++) {
+                map[y][x] = newMap[y][x];
+            }
+        }
+    }
+
+    // Build a spatial index for efficient collision detection
+    buildSpatialIndex(map) {
+        // Create a grid of cells for spatial partitioning
+        const cellSize = 10; // Each cell covers 10x10 tiles
+        const width = map[0].length;
+        const height = map.length;
+        
+        this.spatialGrid = {};
+        
+        // For each wall tile, add it to the appropriate cell
+        for (let y = 0; y < height; y++) {
+            for (let x = 0; x < width; x++) {
+                if (map[y][x] === 1) { // If it's a wall
+                    const cellX = Math.floor(x / cellSize);
+                    const cellY = Math.floor(y / cellSize);
+                    const cellKey = `${cellX},${cellY}`;
+                    
+                    if (!this.spatialGrid[cellKey]) {
+                        this.spatialGrid[cellKey] = [];
+                    }
+                    
+                    this.spatialGrid[cellKey].push({
+                        x: x * this.tileSize,
+                        y: y * this.tileSize,
+                        width: this.tileSize,
+                        height: this.tileSize
+                    });
+                }
+            }
+        }
+    }
+
+    // Optimize the canMove method in Player class to use spatial partitioning
+    canMove(newX, newY, map) {
+        // Check corners of player hitbox
+        const points = [
+            { x: newX - this.size/2, y: newY - this.size/2 },
+            { x: newX + this.size/2, y: newY - this.size/2 },
+            { x: newX - this.size/2, y: newY + this.size/2 },
+            { x: newX + this.size/2, y: newY + this.size/2 }
+        ];
+
+        return points.every(point => map.isWalkable(point.x, point.y));
+    }
+
+    decorateRoom(room, decoration) {
+        for (let y = room.y; y < room.y + room.height; y++) {
+            for (let x = room.x; x < room.x + room.width; x++) {
+                if (y >= 0 && y < this.decorations.length && 
+                    x >= 0 && x < this.decorations[0].length) {
+                    this.decorations[y][x] = decoration;
+                }
+            }
+        }
+    }
+
+    getDecoration(x, y) {
+        if (x < 0 || x >= this.decorations[0].length || 
+            y < 0 || y >= this.decorations.length) {
+            return null;
+        }
+        return this.decorations[y][x];
+    }
+
+    // Add a new method to generate the bomb site room
+    generateBombSiteRoom(attackerSpawn, centerRoom, map) {
+        // We want to place the bomb site somewhere near the attacker spawn
+        // but not too close, and not too close to the center either
+        
+        // Calculate a position between attacker spawn and center, but closer to attacker spawn
+        const midX = Math.floor(attackerSpawn.x + (centerRoom.x - attackerSpawn.x) * 0.4);
+        const midY = Math.floor(attackerSpawn.y + (centerRoom.y - attackerSpawn.y) * 0.4);
+        
+        // Try a few different positions if the first one doesn't work
+        for (let attempt = 0; attempt < 10; attempt++) {
+            // Add some randomness to the position
+            const offsetX = Math.floor((Math.random() * 20) - 10);
+            const offsetY = Math.floor((Math.random() * 20) - 10);
+            
+            const roomX = midX + offsetX;
+            const roomY = midY + offsetY;
+            
+            // Make the bomb site a large room
+            const roomWidth = Math.floor(Math.random() * 6) + 16; // 16-21 tiles
+            const roomHeight = Math.floor(Math.random() * 6) + 16; // 16-21 tiles
+            
+            if (this.canPlaceRoom(roomX, roomY, roomWidth, roomHeight, map)) {
+                const bombSite = this.generateRoom(roomX, roomY, roomWidth, roomHeight, map);
+                console.log('Bomb site created at:', { x: roomX, y: roomY, width: roomWidth, height: roomHeight });
+                return bombSite;
+            }
+        }
+        
+        // If we can't find a good spot after several attempts, use the center room as fallback
+        console.warn('Could not create dedicated bomb site room, using center room as bomb site');
+        return centerRoom;
+    }
+
+    // Add a method to check if a position is within the bomb site
+    isInBombSite(x, y) {
+        // Convert to tile coordinates
+        const tileX = Math.floor(x / this.tileSize);
+        const tileY = Math.floor(y / this.tileSize);
+        
+        // Check if this tile has the bombsite decoration
+        if (tileX >= 0 && tileX < this.decorations[0].length && 
+            tileY >= 0 && tileY < this.decorations.length) {
+            return this.decorations[tileY][tileX] === 'bombsite';
+        }
+        
+        return false;
+    }
+}
+
+// Make Map globally available as GameMap to avoid conflicts with built-in Map
+window.GameMap = Map; 

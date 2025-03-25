@@ -3,8 +3,30 @@ export class Player {
         this.id = Math.random().toString(36).substr(2, 9);
         this.size = 20; // Player size in pixels
         this.speed = 5;
-        this.direction = 0;
+        this.direction = 0; // Base direction
         this.team = team; // 'red', 'blue', or null for spectator/neutral
+        
+        // Game-related properties
+        this.health = 100;
+        this.money = 800; // Starting money
+        this.equipment = []; // Initialize as empty array
+        this.activeWeaponIndex = 0;
+        this.isAlive = true;
+        this.role = team === 'red' ? 'attacker' : 'defender';
+        this.hasBomb = false; // Add bomb carrying status
+        
+        // Aiming properties - make sure this is always initialized
+        this.aim = {
+            angle: 0, // Aim direction in radians
+            x: 0,     // Target x position (mouse position)
+            y: 0      // Target y position (mouse position)
+        };
+        
+        // Round-specific properties
+        this.isPlanting = false;
+        this.isDefusing = false;
+        this.plantingProgress = 0;
+        this.defusingProgress = 0;
 
         // If map is provided, find a safe spawn point
         if (map) {
@@ -18,27 +40,38 @@ export class Player {
     }
 
     findSafeSpawnPosition(map) {
+        console.log(`Finding safe spawn position for player. Team: ${this.team}`);
+        
         // If player has a team, use team spawn point
         if (this.team && (this.team === 'red' || this.team === 'blue')) {
             const spawnPoint = map.getSpawnPoint(this.team);
+            console.log(`Initial team spawn point:`, spawnPoint);
             
             // Check if spawn point is safe
             if (this.canMove(spawnPoint.x, spawnPoint.y, map)) {
+                console.log(`Initial spawn point is safe, using it:`, spawnPoint);
                 return spawnPoint;
             }
             
-            // If not safe, try nearby positions
-            for (let offsetX = -2; offsetX <= 2; offsetX++) {
-                for (let offsetY = -2; offsetY <= 2; offsetY++) {
-                    const x = spawnPoint.x + offsetX * map.tileSize;
-                    const y = spawnPoint.y + offsetY * map.tileSize;
+            console.log(`Initial spawn point wasn't safe, trying spiral pattern...`);
+            // If not safe, try nearby positions in a spiral pattern
+            const maxRadius = 5;
+            for (let radius = 1; radius <= maxRadius; radius++) {
+                for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 8) {
+                    const x = spawnPoint.x + Math.cos(angle) * (radius * map.tileSize);
+                    const y = spawnPoint.y + Math.sin(angle) * (radius * map.tileSize);
+                    
                     if (this.canMove(x, y, map)) {
-                        return { x, y };
+                        const safeSpawn = { x, y };
+                        console.log(`Found safe spawn point in spiral:`, safeSpawn);
+                        return safeSpawn;
                     }
                 }
             }
+            console.log(`No safe position found in spiral pattern`);
         }
 
+        console.log(`Falling back to random position search...`);
         // Fallback to random position if team spawn isn't available
         const maxAttempts = 100; // Prevent infinite loops
         let attempts = 0;
@@ -74,6 +107,9 @@ export class Player {
     }
 
     update(keys, map) {
+        // Skip update if player is dead
+        if (!this.isAlive) return;
+        
         let newX = this.x;
         let newY = this.y;
 
@@ -97,6 +133,140 @@ export class Player {
         ];
 
         return points.every(point => map.isWalkable(point.x, point.y));
+    }
+
+    // Take damage
+    takeDamage(amount) {
+        this.health -= amount;
+        
+        if (this.health <= 0) {
+            this.health = 0;
+            this.die();
+        }
+        
+        return this.health;
+    }
+    
+    // Player dies
+    die() {
+        this.isAlive = false;
+        this.health = 0;
+        
+        // Stop any bomb interaction
+        if (this.isPlanting || this.isDefusing) {
+            if (window.game) {
+                if (this.isPlanting) window.game.stopPlantingBomb();
+                if (this.isDefusing) window.game.stopDefusingBomb();
+            }
+        }
+        
+        // Drop bomb if carrying
+        if (this.hasBomb && window.game) {
+            window.game.dropBomb(this);
+        }
+        
+        // If this is a client death, ensure it's synchronized
+        if (window.game && window.game.combatManager) {
+            window.game.combatManager.syncHealth(this.id, 0);
+        }
+    }
+    
+    // Reset player for new round
+    resetForNewRound(map) {
+        this.health = 100;
+        this.isAlive = true;
+        this.isPlanting = false;
+        this.isDefusing = false;
+        this.plantingProgress = 0;
+        this.defusingProgress = 0;
+        this.hasBomb = false;
+        
+        // Reset position to spawn point
+        if (map) {
+            try {
+                const safePosition = this.findSafeSpawnPosition(map);
+                if (safePosition && typeof safePosition.x === 'number' && typeof safePosition.y === 'number') {
+                    this.x = safePosition.x;
+                    this.y = safePosition.y;
+                }
+            } catch (error) {
+                console.error('Error finding safe position:', error);
+                // Use default spawn if there's an error
+                if (this.team === 'red') {
+                    this.x = 100;
+                    this.y = 100;
+                } else {
+                    this.x = 300;
+                    this.y = 300;
+                }
+            }
+        }
+    }
+
+    updateAim(mouseX, mouseY, camera) {
+        // Convert screen coordinates to world coordinates
+        const worldX = mouseX + camera.x;
+        const worldY = mouseY + camera.y;
+        
+        // Update aim target
+        this.aim.x = worldX;
+        this.aim.y = worldY;
+        
+        // Calculate angle between player and mouse
+        this.aim.angle = Math.atan2(worldY - this.y, worldX - this.x);
+        
+        // Also update base direction for other uses
+        this.direction = this.aim.angle;
+        
+        // Return true if the aim angle changed significantly (for optimization)
+        return true;
+    }
+
+    normalizeForSync() {
+        // Create a safe copy of equipment without circular references
+        const safeEquipment = [];
+        
+        if (this.equipment && Array.isArray(this.equipment)) {
+            for (const item of this.equipment) {
+                if (item) {
+                    // Only include essential weapon properties
+                    safeEquipment.push({
+                        id: item.id,
+                        currentAmmo: item.currentAmmo,
+                        reserveAmmo: item.reserveAmmo,
+                        // Include only essential properties needed for sync
+                        type: item.type,
+                        isReloading: item.isReloading,
+                        lastFired: item.lastFired
+                    });
+                }
+            }
+        }
+        
+        // Return a clean object with only the properties needed for network sync
+        return {
+            id: this.id,
+            x: this.x,
+            y: this.y,
+            direction: this.direction,
+            health: this.health,
+            money: this.money,
+            team: this.team,
+            isAlive: this.isAlive,
+            role: this.role,
+            activeWeaponIndex: this.activeWeaponIndex,
+            equipment: safeEquipment,
+            hasBomb: this.hasBomb,
+            isPlanting: this.isPlanting,
+            isDefusing: this.isDefusing,
+            plantingProgress: this.plantingProgress,
+            defusingProgress: this.defusingProgress,
+            aim: {
+                angle: this.aim.angle,
+                x: this.aim.x,
+                y: this.aim.y
+            }
+        };
     }
 }
 
