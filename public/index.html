@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rust Strike</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Main Menu -->
+    <div id="main-menu" class="screen">
+        <div class="menu-container">
+            <h1>Rust Strike</h1>
+            <button id="host-game" class="menu-button">Host Game</button>
+            <button id="join-game" class="menu-button">Join Game</button>
+            <button id="settings-button" class="menu-button">Settings</button>
+        </div>
+    </div>
+
+    <!-- Game Screen -->
+    <div id="game-container" class="screen hidden">
+        <canvas id="gameCanvas"></canvas>
+        <button class="back-button">Exit Game</button>
+    </div>
+
+    <!-- Settings Menu -->
+    <div id="settings-menu" class="screen hidden">
+        <div class="menu-container">
+            <h2>Settings</h2>
+            <div class="setting-item">
+                <label for="volume">Volume</label>
+                <input type="range" id="volume" min="0" max="100" value="100">
+            </div>
+            <div class="setting-item">
+                <label for="sensitivity">Mouse Sensitivity</label>
+                <input type="range" id="sensitivity" min="1" max="10" value="5">
+            </div>
+            <button class="back-button">Back</button>
+        </div>
+    </div>
+
+    <!-- Room Join Screen -->
+    <div id="room-join" class="screen hidden">
+        <div class="menu-container">
+            <h2>Join Room</h2>
+            <form id="join-room-form">
+                <input type="text" id="room-code" placeholder="Enter Room Code" 
+                       maxlength="6" pattern="[A-Za-z0-9]{6}" required>
+                <button type="submit">Join</button>
+            </form>
+            <button class="back-button">Back</button>
+        </div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+
+    <!-- Game scripts in correct order -->
+    <script src="../src/networking/firebase-config.js" type="module"></script>
+    <script src="../src/core/map.js" type="module"></script>
+    <script src="../src/core/player.js" type="module"></script>
+    <script src="../src/rendering/camera.js" type="module"></script>
+    <script src="../src/rendering/renderer.js" type="module"></script>
+    <script src="../src/networking/RoomManager.js" type="module"></script>
+    <script src="../src/core/game.js" type="module"></script>
+    <script src="../src/ui/UIManager.js" type="module"></script>
+    <script src="../src/index.js" type="module"></script>
+</body>
+</html> 
