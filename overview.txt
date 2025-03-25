@@ -1,0 +1,181 @@
+Game Overview: Rust Strike
+Rust Strike is a simple, top-down multiplayer shooting game. Players can host or join rooms and engage in combat with smooth movement and collision mechanics. Maps are designed using tiles, but player movement is free, creating a fluid and natural feel. The game will implement client-side ray tracing to handle visibility and map rendering to prevent cheating, ensuring only visible areas are shown, and enemies are revealed based on line of sight.
+
+Current Implementation Status:
+✓ Basic Multiplayer Setup
+- Firebase Realtime Database integration
+- Room hosting and joining system
+- Proper player synchronization (20 updates per second)
+- Safe spawn point system for clients near host
+- Clean disconnection handling (both tab close and exit button)
+
+✓ Basic Movement System
+- Smooth, non-grid-based movement
+- Proper collision detection with walls
+- Player position synchronization across clients
+
+✓ Basic Map System
+- Tile-based map generation
+- Wall collision detection
+- Random map generation (currently basic walls)
+
+Next Development Phases:
+
+1. Game Rounds System
+- Implement round-based gameplay
+- Add round start/end conditions
+- Score tracking
+- Team assignment system
+- Round timer implementation
+- Round reset functionality
+
+2. Combat System
+- Implement shooting mechanics
+- Add different weapon types
+- Bullet physics and collision
+- Damage system
+- Health management
+- Death and respawn mechanics
+
+3. Economy System
+- Add in-game currency
+- Buy menu implementation
+- Weapon and equipment purchasing
+- Round-based economy rules
+- Save/load loadout preferences
+
+4. Visual Improvements
+- Add proper textures for walls and floor
+- Player character sprites/animations
+- Weapon animations
+- Particle effects for shooting/hits
+- Map visibility system using ray tracing
+- UI improvements for game state
+
+5. Map System Enhancement
+- Create proper map editor
+- Add different map types
+- Implement map voting system
+- Add map-specific features (doors, windows, etc.)
+- Optimize map rendering
+
+6. Cosmetic System
+- Player skins
+- Weapon skins
+- Animation effects
+- Custom player cards
+- Achievement system
+
+7. Sound System
+- Footstep sounds
+- Weapon sounds
+- Ambient sounds
+- UI sound effects
+- Distance-based sound attenuation
+
+8. Game Modes
+- Deathmatch
+- Team Deathmatch
+- Objective-based modes
+- Custom game settings
+
+9. Social Features
+- Friend system
+- Party system
+- Chat system
+- Quick emotes/commands
+- Player statistics
+
+10. Polish & Optimization
+- Performance improvements
+- Network optimization
+- Anti-cheat measures
+- Better error handling
+- Loading screens
+- Match history
+
+Technical Implementation Notes:
+- Currently using Firebase Realtime Database for real-time updates
+- Player positions update at 20Hz to balance responsiveness and network load
+- Spawn system uses efficient position checking with predefined points
+- Room management includes proper cleanup on both normal exit and disconnection
+- Movement system uses delta time for smooth animation
+- Collision system checks player corners for accurate wall detection
+
+Firebase Security Rules:
+- Room creation limited to prevent abuse
+- Players can only modify their own data
+- Room cleanup handled automatically on host disconnect
+- Proper data validation and sanitization
+
+Next Immediate Steps:
+1. Implement basic shooting mechanics
+2. Add health system
+3. Create round system
+4. Design buy menu UI
+5. Add basic weapon types
+6. Implement proper textures
+7. Add sound effects
+8. Create proper map generation/selection system
+
+The foundation is solid with working multiplayer and movement. The next phase will focus on making it an actual game with combat mechanics and round-based gameplay.
+
+Core Features
+Top-Down View: Players control characters from a bird's-eye perspective, moving and shooting in real-time.
+
+Simple Multiplayer: Players can host or join rooms using Firebase as the backend. Real-time interactions are handled by Firebase's Realtime Database.
+
+Smooth Movement: While the map is tile-based, the player movement is freeform (not tile-based), ensuring smooth control.
+
+Shooting: Players can shoot in 8 directions with the game handling collision with other players and objects.
+
+Collisions: Tile-based collisions with smooth player movement and bullet paths ensuring smooth gameplay.
+
+Visibility System: Using ray tracing, the game will only reveal areas visible to the player and hide out-of-sight portions of the map to prevent map-cheating.
+
+No Frameworks: The game uses pure JavaScript with Firebase for backend hosting and multiplayer functionality, ensuring simplicity and scalability.
+
+Game Flow
+Room Hosting & Joining:
+
+Players can create or join rooms. A Firebase Realtime Database is used to store and sync room data (e.g., player positions, map state).
+
+Room data is synced in real-time, ensuring all players in a room have consistent game states.
+
+Movement & Collision:
+
+Players can move in 8 directions (up, down, left, right, and diagonal).
+
+Collision detection is handled using tile-based checks (solid tiles will block movement).
+
+Smooth movement between tiles is implemented, so players can glide over the tiles without stepping on grid lines.
+
+Shooting:
+
+Players can shoot in any direction.
+
+Bullets will check for collisions with other players, obstacles, and walls using raycasting.
+
+Bullets have a defined range and will disappear once they hit an object or the map boundary.
+
+Map Design:
+
+The game uses a tile-based map for easy creation. Maps are simple grid systems with solid, walkable, and shooting-blocking tiles.
+
+The map is divided into tiles, but players can move fluidly across the grid without snapping to tile boundaries.
+
+Visibility & Raytracing:
+
+The game uses ray tracing to reveal only parts of the map that the player can see based on their line of sight.
+
+The player will only see areas illuminated by their visibility (based on their position and field of view).
+
+Out-of-sight areas will be darkened or hidden to prevent players from cheating by seeing off-screen enemies or items.
+
+Firebase Integration:
+
+Firebase is used for authentication, room management, player data storage, and real-time updates.
+
+Players' positions, health, and bullets are updated in real-time using Firebase's Realtime Database.
+
+The game's UI updates based on Firebase data (e.g., current players in the room, map changes).
