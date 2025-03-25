@@ -1,9 +1,10 @@
 export class Player {
-    constructor(x = 100, y = 100, map = null) {
+    constructor(x = 100, y = 100, map = null, team = null) {
         this.id = Math.random().toString(36).substr(2, 9);
         this.size = 20; // Player size in pixels
         this.speed = 5;
         this.direction = 0;
+        this.team = team; // 'red', 'blue', or null for spectator/neutral
 
         // If map is provided, find a safe spawn point
         if (map) {
@@ -17,6 +18,28 @@ export class Player {
     }
 
     findSafeSpawnPosition(map) {
+        // If player has a team, use team spawn point
+        if (this.team && (this.team === 'red' || this.team === 'blue')) {
+            const spawnPoint = map.getSpawnPoint(this.team);
+            
+            // Check if spawn point is safe
+            if (this.canMove(spawnPoint.x, spawnPoint.y, map)) {
+                return spawnPoint;
+            }
+            
+            // If not safe, try nearby positions
+            for (let offsetX = -2; offsetX <= 2; offsetX++) {
+                for (let offsetY = -2; offsetY <= 2; offsetY++) {
+                    const x = spawnPoint.x + offsetX * map.tileSize;
+                    const y = spawnPoint.y + offsetY * map.tileSize;
+                    if (this.canMove(x, y, map)) {
+                        return { x, y };
+                    }
+                }
+            }
+        }
+
+        // Fallback to random position if team spawn isn't available
         const maxAttempts = 100; // Prevent infinite loops
         let attempts = 0;
 
