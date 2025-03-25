@@ -1,12 +1,12 @@
 Game Overview: Rust Strike
-Rust Strike is a simple, top-down multiplayer shooting game. Players can host or join rooms and engage in combat with smooth movement and collision mechanics. Maps are designed using tiles, but player movement is free, creating a fluid and natural feel. The game will implement client-side ray tracing to handle visibility and map rendering to prevent cheating, ensuring only visible areas are shown, and enemies are revealed based on line of sight.
+Rust Strike is a simple, top-down multiplayer shooting game with team-based gameplay. Players can host or join rooms and engage in combat with smooth movement and collision mechanics. Maps are procedurally generated with team spawn points and a central objective area. The game features a clean, minimalist design focused on tactical gameplay rather than complex graphics or sound.
 
 Current Implementation Status:
 ✓ Basic Multiplayer Setup
 - Firebase Realtime Database integration
 - Room hosting and joining system
 - Proper player synchronization (20 updates per second)
-- Safe spawn point system for clients near host
+- Team-based player assignment (auto-balancing)
 - Clean disconnection handling (both tab close and exit button)
 
 ✓ Basic Movement System
@@ -14,10 +14,12 @@ Current Implementation Status:
 - Proper collision detection with walls
 - Player position synchronization across clients
 
-✓ Basic Map System
-- Tile-based map generation
+✓ Map System
+- Procedurally generated maps with varied room sizes and hallways
+- Team-based spawn points (red and blue)
+- Central objective area
+- Minimum room count to ensure interesting layouts
 - Wall collision detection
-- Random map generation (currently basic walls)
 
 Next Development Phases:
 
@@ -25,7 +27,6 @@ Next Development Phases:
 - Implement round-based gameplay
 - Add round start/end conditions
 - Score tracking
-- Team assignment system
 - Round timer implementation
 - Round reset functionality
 
@@ -66,27 +67,20 @@ Next Development Phases:
 - Custom player cards
 - Achievement system
 
-7. Sound System
-- Footstep sounds
-- Weapon sounds
-- Ambient sounds
-- UI sound effects
-- Distance-based sound attenuation
-
-8. Game Modes
+7. Game Modes
 - Deathmatch
 - Team Deathmatch
 - Objective-based modes
 - Custom game settings
 
-9. Social Features
+8. Social Features
 - Friend system
 - Party system
 - Chat system
 - Quick emotes/commands
 - Player statistics
 
-10. Polish & Optimization
+9. Polish & Optimization
 - Performance improvements
 - Network optimization
 - Anti-cheat measures
@@ -97,10 +91,11 @@ Next Development Phases:
 Technical Implementation Notes:
 - Currently using Firebase Realtime Database for real-time updates
 - Player positions update at 20Hz to balance responsiveness and network load
-- Spawn system uses efficient position checking with predefined points
+- Team-based spawn system with auto-balancing
 - Room management includes proper cleanup on both normal exit and disconnection
 - Movement system uses delta time for smooth animation
 - Collision system checks player corners for accurate wall detection
+- Map generation creates varied layouts with minimum room count guarantees
 
 Firebase Security Rules:
 - Room creation limited to prevent abuse
@@ -115,5 +110,8 @@ Next Immediate Steps:
 4. Design buy menu UI
 5. Add basic weapon types
 6. Implement proper textures
-7. Add sound effects
-8. Create proper map generation/selection system
+7. Create proper map generation/selection system
+
+
+ISSUES:
+clients joining recieve team NULL
