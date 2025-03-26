@@ -143,17 +143,51 @@ export class CombatManager {
         const weapon = shooter.equipment && shooter.equipment[shooter.activeWeaponIndex];
         if (!weapon) return;
         
-        // Calculate bullet trajectory
-        const angle = shotData.angle;
+        // Determine if this is a shotgun
+        const isShotgun = weapon.id.includes('shotgun') || weapon.id.includes('SHOTGUN');
+        const pelletCount = shotData.pelletCount || (isShotgun ? (weapon.pelletCount || 8) : 1);
         
-        // For visual effects only - we trust the shooter's hit detection
-        this.addBulletTrail(
-            shooter.x, 
-            shooter.y, 
-            shooter.x + Math.cos(angle) * weapon.range, 
-            shooter.y + Math.sin(angle) * weapon.range,
-            weapon.bulletTrailColor
-        );
+        // Calculate base bullet angle
+        const baseAngle = shotData.angle;
+        
+        // For each pellet
+        for (let i = 0; i < pelletCount; i++) {
+            // Calculate angle for this pellet
+            let pelletAngle = baseAngle;
+            
+            // Add spread for shotguns
+            if (pelletCount > 1) {
+                const shotgunSpread = 0.2; // Same spread as local shots
+                pelletAngle += (Math.random() - 0.5) * shotgunSpread;
+            }
+            
+            // Calculate end point for visual trail
+            const dirX = Math.cos(pelletAngle);
+            const dirY = Math.sin(pelletAngle);
+            
+            // Raycast to find visual endpoint (just for visual effect)
+            const raycastResult = this.raycastToWall(
+                shooter.x, 
+                shooter.y, 
+                dirX, 
+                dirY, 
+                weapon.range
+            );
+            
+            // Add bullet trail effect
+            this.addBulletTrail(
+                shooter.x, 
+                shooter.y, 
+                raycastResult.x, 
+                raycastResult.y,
+                weapon.bulletTrailColor
+            );
+        }
+        
+        // Add shotgun blast effect for remote shotgun shots
+        if (pelletCount > 1) {
+            this.addShotgunBlastEffect(shooter.x, shooter.y, baseAngle);
+        }
     }
     
     // Process damage event
@@ -272,18 +306,27 @@ export class CombatManager {
     }
     
     // Update method called every frame
-    update() {
-        // Handle continuous shooting for automatic weapons
+    update(deltaTime = 1/60) {
+        // Update bullet trails and hit markers
+        this.updateVisualEffects(deltaTime);
+        
+        // Auto-fire when mouse is held down
         if (this.isMouseDown) {
             this.tryToShoot();
         }
         
-        // Update visual effects
-        this.updateVisualEffects();
+        // Update all weapons of the local player to handle cooldowns
+        if (this.game.localPlayer && this.game.localPlayer.equipment) {
+            this.game.localPlayer.equipment.forEach(weapon => {
+                if (weapon && typeof weapon.update === 'function') {
+                    weapon.update(deltaTime);
+                }
+            });
+        }
     }
     
     // Update bullet trails and hit markers
-    updateVisualEffects() {
+    updateVisualEffects(deltaTime) {
         const now = Date.now();
         
         // Update bullet trails
@@ -322,12 +365,28 @@ export class CombatManager {
         
         // Fire the weapon
         if (weapon.fire(now)) {
-            // Special case for shotguns with multiple pellets
-            const pelletCount = weapon.pelletCount || 1;
+            // Determine if this is a shotgun
+            const isShotgun = weapon.id.includes('shotgun') || weapon.id.includes('SHOTGUN');
+            const pelletCount = isShotgun ? (weapon.pelletCount || 8) : 1;
             
+            // Add shotgun blast effect if it's a shotgun
+            if (isShotgun) {
+                this.addShotgunBlastEffect(player.x, player.y, player.aim.angle);
+            }
+            
+            // Play proper sound effects (if we had them)
+            
+            // For each pellet (or just once for regular guns)
             for (let i = 0; i < pelletCount; i++) {
                 // Calculate bullet trajectory with accuracy variation
-                const bulletAngle = weapon.calculateBulletTrajectory(player.aim.angle);
+                let bulletAngle = weapon.calculateBulletTrajectory(player.aim.angle);
+                
+                // Add additional spread for shotguns
+                if (isShotgun) {
+                    // Add a wider random spread for shotgun pellets
+                    const shotgunSpread = 0.2; // Spread in radians (about 11 degrees)
+                    bulletAngle += (Math.random() - 0.5) * shotgunSpread;
+                }
                 
                 // Raycast to find hit
                 const hit = this.raycastBullet(
@@ -349,12 +408,17 @@ export class CombatManager {
                 
                 // Apply damage if we hit a player
                 if (hit.playerId) {
-                    const distance = Math.sqrt(
+                    // Calculate per-pellet damage for shotguns
+                    let damage = weapon.calculateDamage(Math.sqrt(
                         Math.pow(hit.x - player.x, 2) + 
                         Math.pow(hit.y - player.y, 2)
-                    );
+                    ));
                     
-                    const damage = weapon.calculateDamage(distance);
+                    // For shotguns, divide the damage by pellet count unless specified otherwise
+                    if (isShotgun && !weapon.fullDamagePerPellet) {
+                        damage = damage / pelletCount;
+                    }
+                    
                     this.applyDamage(hit.playerId, damage, player.id);
                     
                     // Add hit marker effect
@@ -362,8 +426,8 @@ export class CombatManager {
                 }
             }
             
-            // Sync shot with server
-            this.syncShot(player.id, player.aim.angle);
+            // Sync shot with server - only need to sync once regardless of pellet count
+            this.syncShot(player.id, player.aim.angle, isShotgun ? pelletCount : 1);
             
             return true;
         }
@@ -604,21 +668,16 @@ export class CombatManager {
         }
         
         // Award money to shooter if they exist
-        if (shooterPlayer) {
-            // Award money for kill (200)
-            shooterPlayer.money += 200;
+        if (shooterPlayer && this.game.roundManager) {
+            // Award money for kill (200) - use the round manager's method
+            this.game.roundManager.awardMoneyToPlayer(shooterId, 200, "Player Kill");
             console.log(`Awarded $200 to ${shooterId} for kill`);
-            
-            // If local player, sync money update
-            if (shooterPlayer === this.game.localPlayer) {
-                this.syncPlayerEquipment(shooterPlayer);
-            }
         }
         
         // Show notification of the kill
         this.showKillNotification(targetId);
         
-        // Force a win condition check - this helps ensure the round ends promptly
+        // Force a win condition check
         if (this.game.roundManager) {
             console.log("Triggering win condition check after player kill");
             setTimeout(() => {
@@ -660,7 +719,7 @@ export class CombatManager {
     }
     
     // Sync shot with server
-    syncShot(playerId, angle) {
+    syncShot(playerId, angle, pelletCount = 1) {
         if (!this.game.roomManager.activeRoom) return;
         
         const shotsRef = this.game.database.ref(
@@ -670,6 +729,7 @@ export class CombatManager {
         shotsRef.set({
             playerId: playerId,
             angle: angle,
+            pelletCount: pelletCount,
             timestamp: window.ServerValue.TIMESTAMP
         });
     }
@@ -853,30 +913,42 @@ export class CombatManager {
     // Add a weapon to player's inventory
     giveWeapon(player, weaponId) {
         // Create the weapon
-        const weapon = WeaponCatalog.createWeapon(weaponId);
-        if (!weapon) return false;
-        
-        // Check if player already has a weapon of this type
-        const existingIndex = player.equipment.findIndex(w => w.type === weapon.type);
-        
-        if (existingIndex >= 0) {
-            // Replace existing weapon of the same type
-            player.equipment[existingIndex] = weapon;
-            
-            // If active weapon was replaced, update index
-            if (player.activeWeaponIndex === existingIndex) {
-                // Switch to the new weapon
-                player.activeWeaponIndex = existingIndex;
-            }
-        } else {
-            // Add as a new weapon
-            player.equipment.push(weapon);
-            
-            // Automatically switch to new weapon
-            player.activeWeaponIndex = player.equipment.length - 1;
+        const weapon = window.WeaponCatalog.createWeapon(weaponId);
+        if (!weapon) {
+            console.error(`Failed to create weapon with ID: ${weaponId}`);
+            return false;
         }
         
-        // Sync weapon changes
+        // Initialize player equipment array if it doesn't exist
+        if (!player.equipment) {
+            player.equipment = [];
+        }
+        
+        // Check if player already has a weapon of the same type
+        const existingWeaponIndex = player.equipment.findIndex(w => w.type === weapon.type);
+        
+        if (existingWeaponIndex !== -1) {
+            // Replace existing weapon
+            player.equipment[existingWeaponIndex] = weapon;
+            
+            // If this was the active weapon, keep it active
+            if (player.activeWeaponIndex === existingWeaponIndex) {
+                // No need to change active index
+            } else {
+                // Set as active weapon
+                player.activeWeaponIndex = existingWeaponIndex;
+            }
+        } else {
+            // Add new weapon
+            player.equipment.push(weapon);
+            
+            // Set as active weapon if it's the first weapon or a primary
+            if (player.equipment.length === 1 || weapon.type === 'primary') {
+                player.activeWeaponIndex = player.equipment.length - 1;
+            }
+        }
+        
+        // Sync equipment with server
         this.syncPlayerEquipment(player);
         
         return true;
@@ -934,18 +1006,18 @@ export class CombatManager {
     handlePlayerRespawn(player) {
         if (!player) return;
         
-        // Reset equipment
-        player.equipment = [];
-        
-        // Give default weapon
-        this.giveWeapon(player, 'STARTER_PISTOL');
-        
-        // Set active weapon
-        player.activeWeaponIndex = 0;
-        
-        // Sync if it's the local player
-        if (player.id === this.game.localPlayer.id) {
-            this.syncPlayerEquipment(player);
+        // Check if player has any equipment, if not give them the starter pistol
+        if (!player.equipment || player.equipment.length === 0) {
+            // Give default weapon
+            this.giveWeapon(player, 'STARTER_PISTOL');
+            
+            // Set active weapon
+            player.activeWeaponIndex = 0;
+            
+            // Sync if it's the local player
+            if (player.id === this.game.localPlayer.id) {
+                this.syncPlayerEquipment(player);
+            }
         }
     }
     
@@ -1021,6 +1093,26 @@ export class CombatManager {
         
         // Add hit marker at player position
         this.addHitMarker(targetPlayer.x, targetPlayer.y);
+    }
+    
+    // Add a new method for shotgun blast visual effect
+    addShotgunBlastEffect(x, y, angle) {
+        // Create a cone effect for shotgun blast
+        const count = 8;
+        const spread = 0.4; // Wide cone for visual effect
+        
+        for (let i = 0; i < count; i++) {
+            const particleAngle = angle + (Math.random() - 0.5) * spread;
+            const distance = 20 + Math.random() * 15; // Short particle trails
+            
+            this.addBulletTrail(
+                x, 
+                y, 
+                x + Math.cos(particleAngle) * distance, 
+                y + Math.sin(particleAngle) * distance,
+                'rgba(255, 200, 50, 0.7)' // Orange-yellow muzzle flash color
+            );
+        }
     }
 }
 

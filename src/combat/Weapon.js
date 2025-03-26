@@ -22,31 +22,43 @@ export class Weapon {
         this.reserveAmmo = config.reserveAmmo;
         this.isReloading = false;
         this.lastFired = 0;
+        this.remainingCooldown = 0; // Tracks remaining cooldown in seconds
         
         // Visual properties (to be used later)
         this.bulletTrailColor = config.bulletTrailColor || '#fff';
         this.muzzleFlash = config.muzzleFlash || false;
     }
     
-    // Calculate time between shots in milliseconds
+    // Calculate time between shots in seconds
     get fireInterval() {
-        return 1000 / this.fireRate;
+        return 1 / this.fireRate;
     }
     
-    // Check if the weapon can fire
+    // Check if the weapon can fire (updated to use deltaTime logic)
     canFire(now) {
         if (this.isReloading) return false;
         if (this.currentAmmo <= 0) return false;
-        if (now - this.lastFired < this.fireInterval) return false;
+        if (this.remainingCooldown > 0) return false;
         return true;
     }
     
-    // Fire the weapon
+    // Update weapon cooldown with deltaTime
+    update(deltaTime) {
+        if (this.remainingCooldown > 0) {
+            this.remainingCooldown -= deltaTime;
+            if (this.remainingCooldown < 0) {
+                this.remainingCooldown = 0;
+            }
+        }
+    }
+    
+    // Fire the weapon (updated to use cooldown system)
     fire(now) {
         if (!this.canFire(now)) return false;
         
         this.currentAmmo--;
         this.lastFired = now;
+        this.remainingCooldown = this.fireInterval;
         
         // Automatically reload when empty if there's reserve ammo
         if (this.currentAmmo === 0 && this.reserveAmmo > 0) {
@@ -142,7 +154,7 @@ export const WeaponCatalog = {
         bulletTrailColor: '#ffe476'
     },
     HEAVY_PISTOL: {
-        id: 'heavy_pistol',
+        id: 'HEAVY_PISTOL',
         name: 'Hand Cannon',
         type: 'secondary',
         damage: 40,
@@ -156,7 +168,7 @@ export const WeaponCatalog = {
         bulletTrailColor: '#ff9a76'
     },
     QUICK_PISTOL: {
-        id: 'quick_pistol',
+        id: 'QUICK_PISTOL',
         name: 'Bullet Bee',
         type: 'secondary',
         damage: 15,
@@ -172,7 +184,7 @@ export const WeaponCatalog = {
     
     // Primary weapons - Rifles
     ASSAULT_RIFLE: {
-        id: 'assault_rifle',
+        id: 'ASSAULT_RIFLE',
         name: 'Recoiler',
         type: 'primary',
         damage: 25,
@@ -186,7 +198,7 @@ export const WeaponCatalog = {
         bulletTrailColor: '#76ff91'
     },
     SNIPER_RIFLE: {
-        id: 'sniper_rifle',
+        id: 'SNIPER_RIFLE',
         name: 'Long Goodbye',
         type: 'primary',
         damage: 100,
@@ -202,7 +214,7 @@ export const WeaponCatalog = {
     
     // Primary weapons - SMGs
     SMG: {
-        id: 'smg',
+        id: 'SMG',
         name: 'Buzzsaw',
         type: 'primary',
         damage: 15,
@@ -216,7 +228,7 @@ export const WeaponCatalog = {
         bulletTrailColor: '#ffd876'
     },
     COMPACT_SMG: {
-        id: 'compact_smg',
+        id: 'COMPACT_SMG',
         name: 'Pocket Storm',
         type: 'primary',
         damage: 12,
@@ -232,34 +244,36 @@ export const WeaponCatalog = {
     
     // Primary weapons - Shotguns
     SHOTGUN: {
-        id: 'shotgun',
+        id: 'SHOTGUN',
         name: 'Roomsweeper',
         type: 'primary',
-        damage: 25, // Per pellet, fires 8 pellets
+        damage: 120, // Total damage if all pellets hit
         range: 300,
-        accuracy: 0.15,
+        accuracy: 0.05, // Base accuracy (additional spread added per pellet)
         fireRate: 1.2,
         magazineSize: 7,
         reserveAmmo: 21,
         reloadTime: 3500,
         cost: 2000,
         bulletTrailColor: '#ff7676',
-        pelletCount: 8
+        pelletCount: 8,
+        fullDamagePerPellet: false // This means the damage is divided by pellet count
     },
     COMBAT_SHOTGUN: {
-        id: 'combat_shotgun',
+        id: 'COMBAT_SHOTGUN',
         name: 'Quick Spread',
         type: 'primary',
-        damage: 20, // Per pellet, fires 6 pellets
+        damage: 100, // Total damage if all pellets hit
         range: 250,
-        accuracy: 0.12,
+        accuracy: 0.04, // Base accuracy (additional spread added per pellet)
         fireRate: 2,
         magazineSize: 8,
         reserveAmmo: 32,
         reloadTime: 2500,
         cost: 1800,
         bulletTrailColor: '#ff7676',
-        pelletCount: 6
+        pelletCount: 6,
+        fullDamagePerPellet: false // This means the damage is divided by pellet count
     },
     
     // Create an instance of a weapon from the catalog
