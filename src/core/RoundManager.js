@@ -741,15 +741,13 @@ export class RoundManager {
         
         const roundRef = this.database.ref(`rooms/${this.activeRoom}/round`);
 
-        // Only set matchWinner if match has actually ended
-        // Remove incorrect assignment that was causing premature match end
-        // this.matchWinner = winningTeam; <- This line was causing the issue
+        this.matchWinner = winningTeam;
         this.winCondition = winCondition;
         
         roundRef.update({
             teams: this.teams,
             matchHistory: this.matchHistory,
-            // Only send matchWinner if it's actually set from checkMatchEnd
+            matchWinner: winningTeam,
             winCondition: winCondition
         });
     }
