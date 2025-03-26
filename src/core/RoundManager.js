@@ -261,7 +261,7 @@ export class RoundManager {
         }
         
         // Listen for bomb carrier changes
-        const bombCarrierRef = window.database.ref(`games/${this.activeRoom}/round/bombCarrier`);
+        const bombCarrierRef = this.database.ref(`rooms/${this.activeRoom}/round/bombCarrier`);
         bombCarrierRef.on('value', (snapshot) => {
             const bombCarrierId = snapshot.val();
             
@@ -664,8 +664,36 @@ export class RoundManager {
         if (this.game.isHost) {
             this.syncRoundData(winningTeam, winCondition);
             
+            // Reset bomb state in Firebase when round ends
+            if (this.activeRoom) {
+                this.database.ref(`rooms/${this.activeRoom}/bomb`).update({
+                    planted: false,
+                    defused: false,
+                    exploded: false,
+                    plantedPosition: null,
+                    plantedTime: 0,
+                    explodeTime: 0,
+                    position: null,
+                    carrierId: null
+                });
+            }
+            
             // Force transition to end state
             this.transitionToNextState(this.STATES.END);
+        }
+        
+        // Always reset local bomb state
+        this.game.plantedBombPosition = null;
+        this.game.bombPlantedTime = 0;
+        this.game.bombExplodeTime = 0;
+        this.game.bombPosition = null;
+        this.game.bombDefused = false;
+        this.game.bombExploded = false;
+        
+        // Reset UI
+        if (this.game.ui) {
+            this.game.ui.showBombTimer(false);
+            this.game.ui.showBombCarrierStatus(false);
         }
         
         // Return the winner info
