@@ -201,7 +201,7 @@ export class Renderer {
         this.ctx.font = '16px Arial';
         this.ctx.textAlign = 'center';
         
-        // Only show state text, remove round number display
+        // Only show state text and timer
         let stateText = '';
         switch (roundManager.currentState) {
             case roundManager.STATES.WAITING:
@@ -224,30 +224,11 @@ export class Renderer {
             const timeLeft = Math.max(0, Math.floor((roundManager.stateEndTime - Date.now()) / 1000));
             this.ctx.fillText(`${timeLeft}s`, this.ctx.canvas.width / 2, 50);
         }
-        
-        // Show team scores in top corners instead (optional if you want to keep these)
-        this.ctx.textAlign = 'left';
-        this.ctx.fillStyle = '#f55';
-        this.ctx.fillText(`Attackers: ${roundManager.teams[roundManager.TEAMS.ATTACKERS].score || 0}`, 20, 30);
-        
-        this.ctx.textAlign = 'right';
-        this.ctx.fillStyle = '#55f';
-        this.ctx.fillText(`Defenders: ${roundManager.teams[roundManager.TEAMS.DEFENDERS].score || 0}`, this.ctx.canvas.width - 20, 30);
     }
 
     // Show debug information about the raycasting
     renderDebugInfo(visibility) {
-        if (!visibility || !visibility.performance) return;
-        
-        const { frameTime, avgFrameTime } = visibility.performance;
-        const rayCount = visibility.rayCount || 0;
-        
-        this.ctx.font = '12px monospace';
-        this.ctx.fillStyle = 'white';
-        this.ctx.textAlign = 'left';
-        
-        this.ctx.fillText(`Rays: ${rayCount}`, 10, this.ctx.canvas.height - 40);
-        this.ctx.fillText(`Ray Time: ${avgFrameTime.toFixed(2)}ms`, 10, this.ctx.canvas.height - 20);
+        // Empty function - remove all debug rendering
     }
 
     // Add this method to the Renderer class to include player health and weapon info

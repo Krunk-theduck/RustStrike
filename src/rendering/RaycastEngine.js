@@ -1,7 +1,7 @@
 export class RaycastEngine {
     constructor(game) {
         this.game = game;
-        this.maxDistance = 500; // Maximum view distance
+        this.maxDistance = 700; // Maximum view distance
         this.rayCount = 120; // Number of rays to cast
         this.fovAngle = Math.PI * 80 / 180; // 80 degree FOV
         
@@ -310,6 +310,18 @@ export class RaycastEngine {
         this.lastUpdateTime = 0;
         
         console.log('Visibility map reinitialized');
+    }
+    
+    setMaxDistance(distance) {
+        this.maxDistance = distance;
+        // Reset visibility map when changing max distance
+        this.initVisibilityMap();
+    }
+    
+    setRayCount(count) {
+        this.rayCount = count;
+        // Reset visibility map when changing ray count
+        this.initVisibilityMap();
     }
 }
 
