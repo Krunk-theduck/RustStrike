@@ -3,23 +3,18 @@ import { UIManager } from './ui/UIManager.js';
 
 // Wait for DOM to load
 document.addEventListener('DOMContentLoaded', () => {
-    // Get canvas element
-    const canvas = document.getElementById('gameCanvas');
-    if (!canvas) {
-        console.error('Canvas element not found!');
-        return;
-    }
-
     // Initialize game
+    const canvas = document.getElementById('gameCanvas');
     const game = new Game(canvas);
     
-    // Initialize UI Manager
+    // Initialize UI manager with game reference
     const ui = new UIManager(game);
+    game.ui = ui; // Make UI accessible from game
+    
+    // Initialize UI
     ui.init();
-
-    // Make UI accessible to game
-    game.ui = ui;
-
-    // Make game accessible for debugging
+    
+    // Make both accessible globally for debugging
     window.game = game;
+    window.ui = ui;
 }); 
