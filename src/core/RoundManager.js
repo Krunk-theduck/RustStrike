@@ -67,6 +67,9 @@ export class RoundManager {
             BOMB_DEFUSED: 'bomb_defused',    // Bomb successfully defused
             TIME_EXPIRED: 'time_expired'     // Time ran out (defenders win)
         };
+        
+        // Add a flag to prevent multiple calls in the same round
+        this._roundStartMoneyAwarded = false;
     }
     
     // Initialize round system when room is created/joined
@@ -295,6 +298,11 @@ export class RoundManager {
             this.stateTimer = null;
         }
         
+        // Reset the round start money flag when transitioning to a new state
+        if (newState !== this.STATES.PREP) {
+            this._roundStartMoneyAwarded = false;
+        }
+        
         switch (newState) {
             case this.STATES.WAITING:
                 // Nothing special to do in waiting state
@@ -334,6 +342,14 @@ export class RoundManager {
         
         // Assign bomb to a random red team player
         this.assignBomb();
+        
+        // Award round start money to all players
+        this.awardRoundStartMoney();
+        
+        // Show buy menu notification
+        if (this.game.ui) {
+            this.game.ui.showNotification('Press B to open the buy menu', 'info');
+        }
         
         console.log('Prep phase started - movement locked, buy menu should show');
     }
@@ -378,12 +394,12 @@ export class RoundManager {
     syncBombAssignment(playerId) {
         try {
             // Check if we have access to the database and roomCode
-            if (window.database && this.activeRoom) {
+            if (this.database && this.activeRoom) {
                 console.log('Syncing bomb assignment to player:', playerId);
                 
                 // Update the bomb carrier in the round data
-                const gameRef = window.database.ref(`games/${this.activeRoom}/round`);
-                gameRef.child('bombCarrier').set(playerId);
+                const roomRef = this.database.ref(`rooms/${this.activeRoom}/round`);
+                roomRef.child('bombCarrier').set(playerId);
             } else {
                 console.warn('Cannot sync bomb assignment - missing database or room code');
             }
@@ -464,8 +480,10 @@ export class RoundManager {
         const roomRef = this.database.ref(`rooms/${this.activeRoom}/round`);
         
         try {
-            // If transitioning from END to PREP, increment round number
+            // If transitioning from END to PREP, increment round number and reset flags
             if (this.currentState === this.STATES.END && nextState === this.STATES.PREP) {
+                this._roundStartMoneyAwarded = false; // Reset the flag
+                
                 await roomRef.update({
                     state: nextState,
                     number: this.roundNumber + 1
@@ -536,14 +554,14 @@ export class RoundManager {
         if (this.currentState !== this.STATES.ACTIVE) {
             return null;
         }
-        
-        this.debugPlayerStatus();
+
+        if (!this.game.isHost) {
+            return;
+        }
         
         // Check for team elimination
         const redTeamAlive = this.countAlivePlayers(this.TEAMS.ATTACKERS);
         const blueTeamAlive = this.countAlivePlayers(this.TEAMS.DEFENDERS);
-        
-        console.log(`Teams alive check - Attackers: ${redTeamAlive}, Defenders: ${blueTeamAlive}`);
         
         // If all attackers eliminated, defenders win
         if (redTeamAlive === 0 && blueTeamAlive > 0) {
@@ -644,7 +662,7 @@ export class RoundManager {
         
         // If host, sync data and transition to end state
         if (this.game.isHost) {
-            this.syncRoundData();
+            this.syncRoundData(winningTeam, winCondition);
             
             // Force transition to end state
             this.transitionToNextState(this.STATES.END);
@@ -690,15 +708,19 @@ export class RoundManager {
     }
     
     // Sync round data to Firebase
-    syncRoundData() {
+    syncRoundData(winningTeam, winCondition) {
         if (!this.activeRoom || !this.game.isHost) return;
         
         const roundRef = this.database.ref(`rooms/${this.activeRoom}/round`);
+
+        this.matchWinner = winningTeam;
+        this.winCondition = winCondition;
         
         roundRef.update({
             teams: this.teams,
             matchHistory: this.matchHistory,
-            matchWinner: this.matchWinner
+            matchWinner: winningTeam,
+            winCondition: winCondition
         });
     }
     
@@ -734,7 +756,7 @@ export class RoundManager {
         
         // Call UI manager to show round end screen with correct win condition
         this.game.ui.showRoundEnd(
-            this.matchHistory[this.matchHistory.length - 1].winner,
+            this.matchWinner,
             winCondition,
             formattedTeams,
             this.matchWinner
@@ -767,6 +789,92 @@ export class RoundManager {
         }
         
         this.activeRoom = null;
+    }
+    
+    // New method to award money at round start
+    awardRoundStartMoney() {
+        if (!this.game.isHost) return;
+        
+        // Add a flag to prevent multiple calls in the same round
+        if (this._roundStartMoneyAwarded) return;
+        this._roundStartMoneyAwarded = true;
+        
+        // Get last round winner
+        let lastRoundWinner = null;
+        if (this.matchHistory && this.matchHistory.length > 0) {
+            lastRoundWinner = this.matchHistory[this.matchHistory.length - 1].winner;
+        }
+        
+        // Process for all players
+        this.game.players.forEach(player => {
+            // Base round money
+            this.awardMoneyToPlayer(player.id, 100, "Round Start");
+            
+            // Winning team bonus
+            if (lastRoundWinner && player.team === lastRoundWinner) {
+                this.awardMoneyToPlayer(player.id, 800, "Round Win Bonus");
+            }
+        });
+        
+        // Also process for local player
+        if (this.game.localPlayer) {
+            // Base round money
+            this.awardMoneyToPlayer(this.game.localPlayer.id, 100, "Round Start");
+            
+            // Winning team bonus
+            if (lastRoundWinner && this.game.localPlayer.team === lastRoundWinner) {
+                this.awardMoneyToPlayer(this.game.localPlayer.id, 800, "Round Win Bonus");
+            }
+        }
+        
+        console.log("Round start money awarded");
+    }
+    
+    // New method to award money to a player
+    awardMoneyToPlayer(playerId, amount, reason) {
+        if (!this.game.isHost) return;
+        
+        // Find player
+        let player = null;
+        if (this.game.localPlayer && this.game.localPlayer.id === playerId) {
+            player = this.game.localPlayer;
+        } else {
+            player = this.game.players.get(playerId);
+        }
+        
+        if (!player) {
+            console.error(`Player ${playerId} not found to award money`);
+            return;
+        }
+        
+        // Award money
+        player.money += amount;
+        
+        // Cap money at 16000
+        player.money = Math.min(player.money, 16000);
+        
+        // Sync with server
+        this.syncPlayerMoney(playerId, player.money, reason);
+        
+        console.log(`Awarded ${amount} to ${playerId} for ${reason}. New total: ${player.money}`);
+    }
+    
+    // New method to sync player money
+    syncPlayerMoney(playerId, amount, reason) {
+        if (!this.game.isHost || !this.activeRoom) return;
+        
+        const roomRef = this.database.ref(`rooms/${this.activeRoom}`);
+        
+        // Update player money
+        roomRef.child(`players/${playerId}/money`).set(amount);
+        
+        // Log money event (optional for debugging)
+        roomRef.child('moneyEvents').push({
+            playerId: playerId,
+            amount: amount,
+            reason: reason,
+            timestamp: firebase.database.ServerValue.TIMESTAMP
+        });
     }
 }
 

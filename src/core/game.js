@@ -6,6 +6,7 @@ import { RoomManager } from '../networking/RoomManager.js';
 import { RoundManager } from './RoundManager.js';
 import { RaycastEngine } from '../rendering/RaycastEngine.js';
 import { CombatManager } from '../combat/CombatManager.js';
+import { UserManager } from '../user/UserManager.js';
 
 export class Game {
     constructor(canvas) {
@@ -34,6 +35,9 @@ export class Game {
         this.defusingStartTime = 0; // Time when defusing started
         this.bombPlantedTime = 0; // Time when bomb was planted
         this.bombExplodeTime = 0; // Time when bomb will explode
+        
+        // Initialize the user manager
+        this.userManager = new UserManager();
         
         this.setupCanvas();
         this.roomManager = new RoomManager(this);
@@ -92,6 +96,9 @@ export class Game {
         // Initialize raycast engine after camera is set
         this.raycastEngine = new RaycastEngine(this);
         
+        // Apply user settings to raycast engine
+        this.applyUserSettings();
+        
         // Initialize combat manager
         this.combatManager = new CombatManager(this);
         
@@ -114,6 +121,14 @@ export class Game {
                 const adaptive = !this.raycastEngine.adaptiveRayCount;
                 this.raycastEngine.setAdaptiveRayCount(adaptive);
                 console.log(`Adaptive ray count: ${adaptive ? 'enabled' : 'disabled'}`);
+            }
+            
+            // Toggle buy menu with 'B' key during prep phase
+            if (e.key === 'b' && this.roundManager && 
+                this.roundManager.currentState === this.roundManager.STATES.PREP) {
+                if (this.ui) {
+                    this.ui.toggleBuyMenu();
+                }
             }
         });
 
@@ -210,6 +225,11 @@ export class Game {
     stopGame() {
         this.isRunning = false;
         
+        // Remove bomb state listener
+        if (this.roomManager && this.roomManager.activeRoom) {
+            this.roomManager.database.ref(`rooms/${this.roomManager.activeRoom}/bomb`).off();
+        }
+        
         // Stop checking win conditions
         this.stopWinConditionChecker();
         
@@ -232,16 +252,103 @@ export class Game {
     gameLoop() {
         if (!this.isRunning) return;
         
-        this.update();
+        const currentTime = performance.now();
+        this.deltaTime = (currentTime - (this.lastFrameTime || currentTime)) / 1000; // Convert to seconds
+        this.lastFrameTime = currentTime;
+        
+        // Limit deltaTime to prevent huge jumps after tab switch or lag
+        this.deltaTime = Math.min(this.deltaTime, 0.1);
+        
+        this.update(this.deltaTime);
         this.render();
         requestAnimationFrame(() => this.gameLoop());
     }
 
-    update() {
+    updateBomb() {
+        // Only host should check for bomb state changes
+        if (!this.isHost || !this.roomManager || !this.roomManager.activeRoom) return;
+
+        const now = Date.now();
+        const roomRef = this.roomManager.database.ref(`rooms/${this.roomManager.activeRoom}`);
+
+        // Get current bomb state from the room
+        roomRef.child('bomb').once('value', (snapshot) => {
+            const bombData = snapshot.val();
+            if (!bombData) return;
+
+            // Check if bomb is planted and not yet exploded or defused
+            if (bombData.planted && !bombData.exploded && !bombData.defused) {
+                // Check if bomb has exceeded explosion time
+                if (now >= bombData.plantedTime + this.BOMB_EXPLOSION_TIME) {
+                    // Update bomb state with complete reset
+                    roomRef.child('bomb').update({
+                        planted: false,
+                        exploded: true,
+                        explodedTime: now,
+                        plantedPosition: null,
+                        plantedTime: 0,
+                        explodeTime: 0,
+                        position: null,
+                        carrierId: null
+                    });
+
+                    // End round with attackers (red team) winning
+                    if (this.roundManager) {
+                        this.roundManager.endRound('red', 'bomb_exploded');
+                    }
+                }
+            }
+
+            // Check if bomb was defused
+            if (bombData.defused && !bombData.exploded) {
+                // Update bomb state with complete reset
+                roomRef.child('bomb').update({
+                    planted: false,
+                    defused: true,
+                    defusedTime: now,
+                    plantedPosition: null,
+                    plantedTime: 0,
+                    explodeTime: 0,
+                    position: null,
+                    carrierId: null
+                });
+
+                // End round with defenders (blue team) winning
+                if (this.roundManager) {
+                    this.roundManager.endRound('blue', 'bomb_defused');
+                }
+            }
+
+            // Listen for these changes on all clients to clean up UI
+            roomRef.child('bomb').on('value', (bombSnapshot) => {
+                const currentBombData = bombSnapshot.val();
+                if (!currentBombData) return;
+
+                // If bomb is no longer planted (either exploded or defused)
+                if (!currentBombData.planted) {
+                    // Clean up local bomb state
+                    this.plantedBombPosition = null;
+                    this.bombPlantedTime = 0;
+                    this.bombExplodeTime = 0;
+                    this.bombPosition = null;
+
+                    // Hide bomb timer UI
+                    if (this.ui) {
+                        this.ui.showBombTimer(false);
+                    }
+                }
+            });
+        });
+    }
+
+    update(deltaTime) {
         try {
+            // Add this line near the start of the update method
+            this.updateBomb();
+
             // Only update player movement if not locked
             if (!this.lockPlayerMovement && this.localPlayer && this.localPlayer.isAlive) {
-                this.localPlayer.update(this.keys, this.map);
+                this.localPlayer.update(this.keys, this.map, deltaTime);
                 
                 // Check for bomb pickup if E key is pressed
                 if (this.keys.e) {
@@ -285,26 +392,38 @@ export class Game {
                     }
                 }
                 
-                // Update planting progress
+                // Update planting progress using deltaTime
                 if (this.localPlayer.isPlanting) {
-                    const now = Date.now();
-                    const elapsedTime = now - this.plantingStartTime;
-                    this.localPlayer.plantingProgress = elapsedTime / this.PLANTING_TIME;
+                    this.localPlayer.plantingProgress += (deltaTime * 1000) / this.PLANTING_TIME;
                     
                     if (this.localPlayer.plantingProgress >= 1) {
                         this.finishPlantingBomb();
                     }
                 }
                 
-                // Update defusing progress
+                // Update defusing progress using deltaTime
                 if (this.localPlayer.isDefusing) {
-                    const now = Date.now();
-                    const elapsedTime = now - this.defusingStartTime;
-                    this.localPlayer.defusingProgress = elapsedTime / this.DEFUSING_TIME;
+                    this.localPlayer.defusingProgress += (deltaTime * 1000) / this.DEFUSING_TIME;
                     
                     if (this.localPlayer.defusingProgress >= 1) {
                         this.finishDefusingBomb();
                     }
+                }
+            }
+            
+            // Update bomb timer if it's active
+            if (this.bombExplodeTimeRemaining > 0) {
+                this.bombExplodeTimeRemaining -= deltaTime;
+                
+                // Update UI with remaining time
+                if (this.ui) {
+                    const remainingMs = this.bombExplodeTimeRemaining * 1000;
+                    this.ui.updateBombTimer(Date.now() + remainingMs);
+                }
+                
+                // Check if bomb should explode
+                if (this.bombExplodeTimeRemaining <= 0 && this.isHost) {
+                    this.handleBombExplosion();
                 }
             }
             
@@ -501,7 +620,11 @@ export class Game {
     resetPlayerForNewRound(player) {
         if (!player) return;
         
-        // Reset player state
+        // Skip if the player has already been reset in this round
+        if (player._resetForCurrentRound) return;
+        player._resetForCurrentRound = true;
+        
+        // Reset player state - keep weapons
         player.resetForNewRound(this.map);
         
         // Reset bomb state
@@ -521,10 +644,8 @@ export class Game {
         this.bombPosition = null;
         this.plantedBombPosition = null;
         
-        // Handle weapon reset through combat manager
-        if (this.combatManager && player.id === this.localPlayer.id) {
-            this.combatManager.handlePlayerRespawn(player);
-        }
+        // Check if player has any weapons, if not, give them the starter pistol
+        this.ensurePlayerHasDefaultWeapon(player);
         
         // Reset bomb flags
         this.bombDefused = false;
@@ -534,6 +655,14 @@ export class Game {
     // Handle round state changes
     handleRoundStateChange(newState) {
         if (newState === this.roundManager.STATES.PREP) {
+            // Reset the reset flag for all players
+            this.players.forEach(player => {
+                player._resetForCurrentRound = false;
+            });
+            if (this.localPlayer) {
+                this.localPlayer._resetForCurrentRound = false;
+            }
+            
             // Reset all players for new round
             this.players.forEach(player => {
                 this.resetPlayerForNewRound(player);
@@ -590,65 +719,30 @@ export class Game {
 
     // Start planting the bomb
     startPlantingBomb() {
-        // Check if already planting
-        if (this.localPlayer.isPlanting) {
-            console.log('Already planting bomb');
+        if (!this.localPlayer.hasBomb || 
+            this.localPlayer.isPlanting || 
+            this.localPlayer.team !== 'red' ||
+            this.roundManager.currentState !== this.roundManager.STATES.ACTIVE) {
             return;
         }
         
-        // Check if player has bomb
-        if (!this.localPlayer.hasBomb) {
-            console.log('Player does not have the bomb');
-            return;
-        }
-        
-        // Check player position
-        console.log('Player position:', { x: this.localPlayer.x, y: this.localPlayer.y });
-        
-        // Check if player is in bomb site
-        const inBombSite = this.map.isInBombSite(this.localPlayer.x, this.localPlayer.y);
-        console.log('In bomb site:', inBombSite);
-        
-        if (!inBombSite) {
-            this.showTemporaryMessage('You must be in a bomb site to plant');
-            return;
-        }
-        
-        // Start the planting process
+        // Start planting process
         this.localPlayer.isPlanting = true;
         this.localPlayer.plantingProgress = 0;
         
-        // Show planting UI
+        // Sync with network
+        if (this.roomManager && this.roomManager.activeRoom) {
+            this.roomManager.database.ref(`rooms/${this.roomManager.activeRoom}/players/${this.localPlayer.id}`).update({
+                isPlanting: true
+            });
+        }
+        
+        // Update UI
         if (this.ui) {
             this.ui.showPlantingProgress(true);
         }
         
-        // Set up planting progress timer
-        const PLANTING_TIME = 4000; // 4 seconds to plant
-        const UPDATE_INTERVAL = 50; // Update every 50ms
-        const INCREMENT = UPDATE_INTERVAL / PLANTING_TIME;
-        
-        this.plantingTimer = setInterval(() => {
-            // Add the missing method implementation here
-            this.updatePlantingProgress(INCREMENT);
-        }, UPDATE_INTERVAL);
-    }
-
-    // Add this missing method
-    updatePlantingProgress(increment) {
-        if (!this.localPlayer.isPlanting) return;
-        
-        this.localPlayer.plantingProgress += increment;
-        
-        // Update UI
-        if (this.ui) {
-            this.ui.showPlantingProgress(true, this.localPlayer.plantingProgress);
-        }
-        
-        // Check if planting is complete
-        if (this.localPlayer.plantingProgress >= 1) {
-            this.finishPlantingBomb();
-        }
+        console.log('Started planting bomb');
     }
 
     // Stop planting the bomb (called when interrupted)
@@ -692,6 +786,11 @@ export class Game {
             this.ui.showBombTimer(true, this.bombExplodeTime);
         }
         
+        // Award planting bonus
+        if (this.roundManager) {
+            this.roundManager.awardMoneyToPlayer(this.localPlayer.id, 100, "Bomb Plant");
+        }
+        
         // Sync with network
         if (this.roomManager && this.roomManager.activeRoom) {
             this.roomManager.database.ref(`rooms/${this.roomManager.activeRoom}/bomb`).update({
@@ -700,7 +799,8 @@ export class Game {
                 planted: true,
                 plantedPosition: this.plantedBombPosition,
                 plantedTime: this.bombPlantedTime,
-                explodeTime: this.bombExplodeTime
+                explodeTime: this.bombExplodeTime,
+                plantedBy: this.localPlayer.id // Add this to track who planted
             });
             
             this.roomManager.database.ref(`rooms/${this.roomManager.activeRoom}/players/${this.localPlayer.id}`).update({
@@ -717,6 +817,12 @@ export class Game {
 
     // Start the bomb explosion timer
     startBombTimer() {
+        // Clear any existing timer first
+        if (this.bombTimer) {
+            clearTimeout(this.bombTimer);
+            this.bombTimer = null;
+        }
+        
         // Calculate time until explosion
         const BOMB_TIMER_DURATION = 45000; // 45 seconds
         this.bombPlantedTime = Date.now();
@@ -724,25 +830,32 @@ export class Game {
         
         // Make sure we have a valid this.roomManager before trying to access properties
         if (this.roomManager && this.roomManager.activeRoom) {
-            const isHost = this.roomManager.isHost || false; // Add fallback value
+            const isHost = this.roomManager.isHost || false;
             
             // Show the timer in UI
             if (this.ui) {
                 this.ui.showBombTimer(true, this.bombExplodeTime);
             }
             
-            // Add safety check here
-            if (isHost) { 
-                // Set up the explosion timer
-                this.bombTimer = setTimeout(() => {
-                    this.handleBombExplosion();
-                }, BOMB_TIMER_DURATION);
-            }
+            // Sync bomb state with network
+            this.roomManager.database.ref(`rooms/${this.roomManager.activeRoom}/bomb`).update({
+                planted: true,
+                plantedTime: this.bombPlantedTime,
+                explodeTime: this.bombExplodeTime,
+                timerDuration: BOMB_TIMER_DURATION,
+                position: this.plantedBombPosition,
+                exploded: false,
+                defused: false
+            });
+            
+            // Now we use an internal timer that uses deltaTime instead of setTimeout
+            this.bombExplodeTimeRemaining = BOMB_TIMER_DURATION / 1000; // Convert to seconds
         } else {
             console.warn('Room manager not available, bomb timer won\'t be synchronized');
             // Still show UI for local player
             if (this.ui) {
                 this.ui.showBombTimer(true, Date.now() + BOMB_TIMER_DURATION);
+                this.bombExplodeTimeRemaining = BOMB_TIMER_DURATION / 1000; // Convert to seconds
             }
         }
     }
@@ -768,7 +881,6 @@ export class Game {
         
         // Start defusing process
         this.localPlayer.isDefusing = true;
-        this.defusingStartTime = Date.now();
         this.localPlayer.defusingProgress = 0;
         
         // Sync with network
@@ -822,6 +934,11 @@ export class Game {
         
         console.log("Bomb defused");
         
+        // Award defuse bonus
+        if (this.roundManager) {
+            this.roundManager.awardMoneyToPlayer(this.localPlayer.id, 300, "Bomb Defuse");
+        }
+        
         // Update local player state
         this.localPlayer.isDefusing = false;
         
@@ -848,6 +965,7 @@ export class Game {
         
         // Update bomb state in Firebase to ensure all clients know it was defused
         if (this.roomManager && this.roomManager.activeRoom) {
+            // First update the bomb state
             this.roomManager.database.ref(`rooms/${this.roomManager.activeRoom}/bomb`).update({
                 planted: false,
                 defused: true,
@@ -855,24 +973,16 @@ export class Game {
                 defusedTime: Date.now()
             });
             
-            // Also update the round state to end the round
+            // Then update the round state to end the round
             this.roomManager.database.ref(`rooms/${this.roomManager.activeRoom}/round`).update({
-                state: "END",
+                state: this.roundManager.STATES.END,
                 winningTeam: "blue", // Since defenders (blue team) win when bomb is defused
-                winCondition: "BOMB_DEFUSED"
-            });
-        }
-        
-        // Send game event through roomManager if available
-        if (this.roomManager && typeof this.roomManager.sendGameEvent === 'function') {
-            this.roomManager.sendGameEvent({
-                type: "BOMB_DEFUSED",
-                playerId: this.localPlayer.id
+                winCondition: "bomb_defused",
+                stateEndTime: Date.now() + this.roundManager.TIMER.END
             });
         }
         
         // End the round in favor of defenders
-        // Both host and defuser can call this to ensure the round ends
         if (this.roundManager) {
             this.roundManager.endRound('blue', 'bomb_defused');
         }
@@ -971,30 +1081,94 @@ export class Game {
         console.log("Bomb exploded!");
         
         // Clear the bomb timer
-        this.bombTimer = null;
+        if (this.bombTimer) {
+            clearTimeout(this.bombTimer);
+            this.bombTimer = null;
+        }
         
-        // Set a flag to indicate the bomb exploded
+        // Clear bomb state
+        this.bombPosition = null;
+        this.plantedBombPosition = null;
+        this.bombPlantedTime = 0;
+        this.bombExplodeTime = 0;
         this.bombDefused = false;
         this.bombExploded = true;
         
+        // Hide bomb timer UI
+        if (this.ui) {
+            this.ui.showBombTimer(false);
+        }
+        
         // Update bomb state in Firebase
         if (this.roomManager && this.roomManager.activeRoom) {
+            // First update the bomb state
             this.roomManager.database.ref(`rooms/${this.roomManager.activeRoom}/bomb`).update({
+                planted: false,
                 exploded: true,
-                explodedTime: Date.now()
+                explodedTime: Date.now(),
+                position: null,
+                plantedTime: 0,
+                explodeTime: 0
             });
             
-            // Also update the round state to end the round
+            // Then update the round state to end the round
             this.roomManager.database.ref(`rooms/${this.roomManager.activeRoom}/round`).update({
-                state: "END",
+                state: this.roundManager.STATES.END,
                 winningTeam: "red", // Attackers win when bomb explodes
-                winCondition: "BOMB_EXPLODED"
+                winCondition: "bomb_exploded",
+                stateEndTime: Date.now() + this.roundManager.TIMER.END
             });
         }
         
         // End the round in favor of attackers
         if (this.roundManager) {
             this.roundManager.endRound('red', 'bomb_exploded');
+        }
+    }
+
+    // New method to apply user settings
+    applyUserSettings() {
+        if (!this.userManager || !this.raycastEngine) return;
+        
+        // Get performance settings
+        const perfSettings = this.userManager.getPerformanceSettings();
+        if (perfSettings) {
+            this.raycastEngine.maxDistance = perfSettings.maxDistance;
+            this.raycastEngine.rayCount = perfSettings.rayCount;
+            
+            const settings = this.userManager.getSettings();
+            this.raycastEngine.setAdaptiveRayCount(settings.adaptiveRayCount);
+        }
+    }
+
+    // Listen for money changes
+    setupRoomListeners() {
+        // Listen for money changes
+        const moneyRef = this.database.ref(`rooms/${this.roomManager.activeRoom}/moneyEvents`);
+        moneyRef.on('child_added', (snapshot) => {
+            const moneyEvent = snapshot.val();
+            if (!moneyEvent || moneyEvent.playerId !== this.localPlayer.id) return;
+            
+            // Show notification for the money change
+            if (this.ui) {
+                this.ui.showMoneyChangeNotification(moneyEvent.amount, moneyEvent.reason);
+            }
+            
+            // Remove the event after processing
+            snapshot.ref.remove();
+        });
+    }
+
+    // New method to ensure player always has a weapon
+    ensurePlayerHasDefaultWeapon(player) {
+        if (!player) return;
+        
+        // Check if player has any equipment
+        if (!player.equipment || player.equipment.length === 0) {
+            // Give them the starter pistol
+            if (this.combatManager) {
+                this.combatManager.giveWeapon(player, 'STARTER_PISTOL');
+            }
         }
     }
 }

@@ -2,7 +2,7 @@ export class Player {
     constructor(x = 100, y = 100, map = null, team = null) {
         this.id = Math.random().toString(36).substr(2, 9);
         this.size = 20; // Player size in pixels
-        this.speed = 5;
+        this.speed = 200; // Speed in units per second (increased from 2 to account for deltaTime)
         this.direction = 0; // Base direction
         this.team = team; // 'red', 'blue', or null for spectator/neutral
         
@@ -106,17 +106,20 @@ export class Player {
         };
     }
 
-    update(keys, map) {
+    update(keys, map, deltaTime = 1/60) {
         // Skip update if player is dead
         if (!this.isAlive) return;
         
         let newX = this.x;
         let newY = this.y;
 
-        if (keys.ArrowUp || keys.w) newY -= this.speed;
-        if (keys.ArrowDown || keys.s) newY += this.speed;
-        if (keys.ArrowLeft || keys.a) newX -= this.speed;
-        if (keys.ArrowRight || keys.d) newX += this.speed;
+        // Apply deltaTime to movement
+        const frameSpeed = this.speed * deltaTime;
+
+        if (keys.ArrowUp || keys.w) newY -= frameSpeed;
+        if (keys.ArrowDown || keys.s) newY += frameSpeed;
+        if (keys.ArrowLeft || keys.a) newX -= frameSpeed;
+        if (keys.ArrowRight || keys.d) newX += frameSpeed;
 
         // Check collision before applying movement
         if (this.canMove(newX, this.y, map)) this.x = newX;
@@ -171,7 +174,7 @@ export class Player {
         }
     }
     
-    // Reset player for new round
+    // Reset player for new round - modified to preserve weapons
     resetForNewRound(map) {
         this.health = 100;
         this.isAlive = true;
@@ -180,6 +183,9 @@ export class Player {
         this.plantingProgress = 0;
         this.defusingProgress = 0;
         this.hasBomb = false;
+        
+        // Note: We intentionally do NOT reset equipment or money here
+        // to preserve weapons between rounds
         
         // Reset position to spawn point
         if (map) {
