@@ -267,6 +267,9 @@ export class Game {
     updateBomb() {
         // Only host should check for bomb state changes
         if (!this.isHost || !this.roomManager || !this.roomManager.activeRoom) return;
+        
+        // Don't update bomb during round transitions
+        if (this.roundManager.currentState !== this.roundManager.STATES.ACTIVE) return;
 
         try {
             const now = Date.now();
@@ -352,6 +355,9 @@ export class Game {
                     } else if (currentBombData.planted && currentBombData.explodeTime) {
                         // Don't update if the bomb is about to be defused or exploded
                         if (this.bombDefused || this.bombExploded) return;
+                        
+                        // Don't update if we're not in active round state
+                        if (this.roundManager.currentState !== this.roundManager.STATES.ACTIVE) return;
                         
                         // Only update if the bomb state is valid
                         if (currentBombData.explodeTime > Date.now()) {
@@ -700,6 +706,42 @@ export class Game {
         this.bombExploded = false;
     }
     
+    // Completely reset all bomb-related variables
+    resetAllBombState() {
+        // Reset all bomb variables
+        this.bombPosition = null;
+        this.plantedBombPosition = null;
+        this.plantingStartTime = 0;
+        this.defusingStartTime = 0;
+        this.bombPlantedTime = 0;
+        this.bombExplodeTime = 0;
+        this.bombExplodeTimeRemaining = 0;
+        this.bombDefused = false;
+        this.bombExploded = false;
+        
+        // Clear any bomb timers
+        if (this.bombTimer) {
+            clearTimeout(this.bombTimer);
+            this.bombTimer = null;
+        }
+        
+        if (this.defusingInterval) {
+            clearInterval(this.defusingInterval);
+            this.defusingInterval = null;
+        }
+        
+        // Reset listener flag to ensure fresh listener setup
+        this._bombListenerSet = false;
+        
+        // Reset bomb UI
+        if (this.ui) {
+            this.ui.showBombTimer(false);
+            this.ui.showBombCarrierStatus(false);
+            this.ui.showPlantingProgress(false);
+            this.ui.showDefusingProgress(false);
+        }
+    }
+    
     // Handle round state changes
     handleRoundStateChange(newState) {
         if (newState === this.roundManager.STATES.PREP) {
@@ -735,31 +777,8 @@ export class Game {
                 });
             }
             
-            // Always reset local bomb state
-            this.plantedBombPosition = null;
-            this.bombPlantedTime = 0;
-            this.bombExplodeTime = 0;
-            this.bombPosition = null;
-            this.bombDefused = false;
-            this.bombExploded = false;
-            this.bombExplodeTimeRemaining = 0;
-            
-            // Clear any bomb timers
-            if (this.bombTimer) {
-                clearTimeout(this.bombTimer);
-                this.bombTimer = null;
-            }
-            
-            // Clear the bomb listener flag to ensure a fresh listener setup
-            this._bombListenerSet = false;
-            
-            // Reset bomb UI
-            if (this.ui) {
-                this.ui.showBombTimer(false);
-                this.ui.showBombCarrierStatus(false);
-                this.ui.showPlantingProgress(false);
-                this.ui.showDefusingProgress(false);
-            }
+            // Use the complete bomb state reset
+            this.resetAllBombState();
             
             // Hide round end UI if it's showing
             if (this.ui) {
@@ -792,27 +811,14 @@ export class Game {
                     plantedPosition: null,
                     plantedTime: 0,
                     explodeTime: 0,
+                    timerDuration: 0,
                     position: null,
                     carrierId: null
                 });
             }
             
-            // Always clean up local bomb state
-            this.plantedBombPosition = null;
-            this.bombPlantedTime = 0;
-            this.bombExplodeTime = 0;
-            this.bombPosition = null;
-            
-            // Clear any bomb timers
-            if (this.bombTimer) {
-                clearTimeout(this.bombTimer);
-                this.bombTimer = null;
-            }
-            
-            // Reset bomb UI
-            if (this.ui) {
-                this.ui.showBombTimer(false);
-            }
+            // Use the complete bomb state reset
+            this.resetAllBombState();
         }
     }
 
@@ -947,8 +953,24 @@ export class Game {
         this.startBombTimer();
     }
 
+    // Helper to check if we need to setup bomb timer
+    shouldSetupBombTimer() {
+        // Don't setup timers if round isn't active or bomb already exploded/defused
+        if (this.roundManager.currentState !== this.roundManager.STATES.ACTIVE ||
+            this.bombDefused || 
+            this.bombExploded) {
+            return false;
+        }
+        return true;
+    }
+
     // Start the bomb explosion timer
     startBombTimer() {
+        // Don't set up timer if we shouldn't
+        if (!this.shouldSetupBombTimer()) {
+            return;
+        }
+        
         // Clear any existing timer first
         if (this.bombTimer) {
             clearTimeout(this.bombTimer);
