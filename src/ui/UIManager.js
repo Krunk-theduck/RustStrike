@@ -521,34 +521,17 @@ export class UIManager {
     // Show bomb timer
     showBombTimer(show, explodeTime) {
         if (!this.bombTimer) return;
+        if (this.bombTimer.style.display == 'block' && show) return;
         
         if (show && explodeTime) {
             this.bombTimer.style.display = 'block';
+            this.bombExplodeTime = explodeTime;
             
-            // Start updating the timer
-            this.bombTimerInterval = setInterval(() => {
-                const timeLeft = Math.max(0, Math.ceil((explodeTime - Date.now()) / 1000));
-                this.bombTimer.textContent = `BOMB: ${timeLeft}s`;
-                
-                // Make it flash faster as time runs out
-                if (timeLeft <= 10) {
-                    this.bombTimer.style.backgroundColor = timeLeft % 2 === 0 ? 
+            this.bombTimer.textContent = `BOMB: ${this.timeLeft}s`;
+            this.bombTimer.style.backgroundColor = this.timeLeft % 2 === 0 ? 
                         'rgba(255, 0, 0, 0.9)' : 'rgba(255, 255, 0, 0.9)';
-                }
-                
-                // Stop when timer reaches zero
-                if (timeLeft <= 0) {
-                    clearInterval(this.bombTimerInterval);
-                }
-            }, 100);
         } else {
             this.bombTimer.style.display = 'none';
-            
-            // Clear the timer interval
-            if (this.bombTimerInterval) {
-                clearInterval(this.bombTimerInterval);
-                this.bombTimerInterval = null;
-            }
         }
     }
 
