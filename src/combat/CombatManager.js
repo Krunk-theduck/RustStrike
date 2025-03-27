@@ -39,7 +39,6 @@ export class CombatManager {
                 if (starterPistol) {
                     this.game.localPlayer.equipment.push(starterPistol);
                     this.game.localPlayer.activeWeaponIndex = 0;
-                    console.log('Default weapon added to player:', starterPistol.name);
                 } else {
                     console.error('Failed to create starter pistol');
                 }
@@ -196,7 +195,6 @@ export class CombatManager {
         
         // Skip if this update is about the local player as shooter - we've already handled it
         if (this.game.localPlayer && shooterId === this.game.localPlayer.id) {
-            console.log('Skipping remote damage update for local player shot - already processed');
             return;
         }
         
@@ -219,7 +217,6 @@ export class CombatManager {
         const currentHealth = Math.max(0, targetPlayer.health - damage);
         targetPlayer.health = currentHealth;
         
-        console.log(`Remote damage processed: Player ${targetId} health updated to ${currentHealth}`);
         
         // If player died, handle kill
         if (currentHealth <= 0 && targetPlayer.isAlive) {
@@ -614,7 +611,6 @@ export class CombatManager {
         const previousHealth = targetPlayer.health;
         const remainingHealth = targetPlayer.takeDamage(damage);
         
-        console.log(`Player ${targetId} took ${damage} damage. Health: ${remainingHealth}`);
         
         // Check if player died
         if (remainingHealth <= 0) {
@@ -649,7 +645,6 @@ export class CombatManager {
     
     // Handle player kill
     handlePlayerKill(targetId, shooterId) {
-        console.log(`Player ${targetId} killed by ${shooterId}`);
         
         // Find the target player
         let targetPlayer = null;
@@ -671,7 +666,6 @@ export class CombatManager {
         if (shooterPlayer && this.game.roundManager) {
             // Award money for kill (200) - use the round manager's method
             this.game.roundManager.awardMoneyToPlayer(shooterId, 200, "Player Kill");
-            console.log(`Awarded $200 to ${shooterId} for kill`);
         }
         
         // Show notification of the kill
@@ -679,7 +673,6 @@ export class CombatManager {
         
         // Force a win condition check
         if (this.game.roundManager) {
-            console.log("Triggering win condition check after player kill");
             setTimeout(() => {
                 this.game.roundManager.checkRoundWinConditions();
             }, 100);
@@ -738,8 +731,6 @@ export class CombatManager {
     syncHealth(playerId, health) {
         if (!this.game.roomManager.activeRoom) return;
         
-        console.log(`Syncing health for player ${playerId}: ${health}, isAlive: ${health > 0}`);
-        
         const playerRef = this.game.database.ref(
             `rooms/${this.game.roomManager.activeRoom}/players/${playerId}`
         );
@@ -754,7 +745,6 @@ export class CombatManager {
         
         // Force a win condition check after syncing health if player died
         if (health <= 0 && this.game.isHost && this.game.roundManager) {
-            console.log(`Player ${playerId} died, checking win conditions...`);
             setTimeout(() => {
                 this.game.roundManager.checkRoundWinConditions();
             }, 200);
