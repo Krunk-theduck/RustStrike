@@ -108,7 +108,6 @@ export class Game {
         this.setupInputHandlers();
         this.gameLoop();
         
-        console.log('Game initialized successfully');
     }
 
     setupInputHandlers() {
@@ -120,7 +119,6 @@ export class Game {
             if (e.key === 'r' && this.raycastEngine && !this.isReloading()) {
                 const adaptive = !this.raycastEngine.adaptiveRayCount;
                 this.raycastEngine.setAdaptiveRayCount(adaptive);
-                console.log(`Adaptive ray count: ${adaptive ? 'enabled' : 'disabled'}`);
             }
             
             // Toggle buy menu with 'B' key during prep phase
@@ -307,23 +305,7 @@ export class Game {
 
                     // Check if bomb was defused
                     if (bombData.defused && !bombData.exploded) {
-                        // Update bomb state with complete reset
-                        roomRef.child('bomb').update({
-                            planted: false,
-                            defused: true,
-                            defusedTime: now,
-                            plantedPosition: null,
-                            plantedTime: 0,
-                            explodeTime: 0,
-                            timerDuration: 0,
-                            position: null,
-                            carrierId: null
-                        });
-
-                        // End round with defenders (blue team) winning
-                        if (this.roundManager) {
-                            this.roundManager.endRound('blue', 'bomb_defused');
-                        }
+                        this.handleBombDefusedEvent();
                     }
                 } catch (innerError) {
                     console.error('Error checking bomb state:', innerError);
@@ -515,6 +497,13 @@ export class Game {
         } catch (error) {
             console.error('Error in game update:', error);
         }
+
+        // Fix for end screen desync
+        if (this.roundManager.currentState === this.roundManager.STATES.END) {
+            this.roundManager.showRoundEndUI();
+        } else if (this.roundManager.currentState !== this.roundManager.STATES.END && this.ui) {
+            this.ui.hideRoundEnd();
+        }
     }
 
     // Check if player is near the bomb to show pickup indicator
@@ -563,7 +552,6 @@ export class Game {
             });
         }
         
-        console.log('Bomb picked up by', this.localPlayer.id);
     }
 
     // Drop bomb (called when player dies)
@@ -591,7 +579,6 @@ export class Game {
             });
         }
         
-        console.log('Bomb dropped at', this.bombPosition);
     }
 
     render() {
@@ -840,7 +827,6 @@ export class Game {
             }
         }, 250);
         
-        console.log("Win condition checker started");
     }
 
     // Stop win condition checking
@@ -933,11 +919,12 @@ export class Game {
                 position: null,
                 planted: true,
                 plantedPosition: this.plantedBombPosition,
-                plantedBy: this.localPlayer.id
+                plantedBy: this.localPlayer.id,
+                plantedTime: this.bombPlantedTime,
+                explodeTime: this.bombExplodeTime,
+                exploded: false,
+                defused: false
             };
-            
-            bombUpdate.plantedTime = this.bombPlantedTime;
-            bombUpdate.explodeTime = this.bombExplodeTime;
             
             this.roomManager.database.ref(`rooms/${this.roomManager.activeRoom}/bomb`).update(bombUpdate);
             
@@ -971,12 +958,7 @@ export class Game {
             // Sync bomb state with network
             if (this.roomManager && this.roomManager.activeRoom) {
                 const bombUpdate = {
-                    planted: true,
-                    plantedTime: this.bombPlantedTime,
-                    explodeTime: this.bombExplodeTime,
                     timerDuration: BOMB_TIMER_DURATION,
-                    exploded: false,
-                    defused: false
                 };
                 
                 // Make sure we have the planted position
@@ -1105,6 +1087,7 @@ export class Game {
             this.roomManager.database.ref(`rooms/${this.roomManager.activeRoom}/bomb`).update({
                 planted: false,
                 defused: true,
+                exploded: false,
                 defusedBy: this.localPlayer.id,
                 defusedTime: Date.now(),
                 // Make sure timer values are reset to prevent timer desync
@@ -1112,42 +1095,58 @@ export class Game {
                 explodeTime: 0,
                 timerDuration: 0
             });
-            
-            // Update round state to end the round with defenders winning
-            this.roomManager.database.ref(`rooms/${this.roomManager.activeRoom}/round`).update({
-                state: this.roundManager.STATES.END,
-                winningTeam: "blue", // Since defenders (blue team) win when bomb is defused
-                winCondition: "bomb_defused",
-                stateEndTime: Date.now() + this.roomManager.TIMER.END
-            });
         }
         
-        // End the round in favor of defenders
-        if (this.roundManager) {
-            this.roundManager.endRound('blue', 'bomb_defused');
-        }
+        // Dont end round, host does bomb checks
     }
 
     // Add a method to handle the BOMB_DEFUSED event from other players
-    handleBombDefusedEvent(data) {
+    handleBombDefusedEvent() {
         // Stop any bomb timers
         if (this.bombTimer) {
             clearTimeout(this.bombTimer);
             this.bombTimer = null;
         }
         
-        // Update bomb state
-        this.plantedBombPosition = null;
-        this.bombPlantedTime = 0;
-        this.bombExplodeTime = 0;
-        
         // Hide the timer
         if (this.ui) {
             this.ui.showBombTimer(false);
         }
+
+        // Clear bomb state
+        this.bombPosition = null;
+        this.plantedBombPosition = null;
+        this.bombPlantedTime = 0;
+        this.bombExplodeTime = 0;
+        this.bombDefused = true;
+        this.bombExploded = false;
+
+        // Update bomb state in Firebase
+        if (this.roomManager && this.roomManager.activeRoom) {
+            // First update the bomb state
+            this.roomManager.database.ref(`rooms/${this.roomManager.activeRoom}/bomb`).update({
+                planted: false,
+                defused: true,
+                defusedTime: Date.now(),
+                plantedPosition: null,
+                plantedTime: 0,
+                explodeTime: 0,
+                timerDuration: 0,
+                position: null,
+                carrierId: null
+            });
+            
+            // Then update the round state to end the round
+            this.roomManager.database.ref(`rooms/${this.roomManager.activeRoom}/round`).update({
+                state: this.roundManager.STATES.END,
+                winningTeam: "blue", // Since defenders (blue team) win when bomb is defused
+                winCondition: "bomb_defused",
+                stateEndTime: Date.now() + this.roundManager.TIMER.END
+            });
+        }
         
-        // End the round if we're the host
-        if (this.isHost && this.roundManager) {
+        // End the round in favor of attackers
+        if (this.roundManager) {
             this.roundManager.endRound('blue', 'bomb_defused');
         }
     }

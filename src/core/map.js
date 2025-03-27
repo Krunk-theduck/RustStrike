@@ -27,12 +27,6 @@ export class Map {
         if (this.rooms.redSpawn) this.decorateRoom(this.rooms.redSpawn, 'red');
         if (this.rooms.blueSpawn) this.decorateRoom(this.rooms.blueSpawn, 'blue');
         if (this.rooms.bombSite) this.decorateRoom(this.rooms.bombSite, 'bombsite');
-        
-        // Debug log to verify spawn points after map generation
-        console.log('Final team spawns after map generation:', {
-            red: { ...this.teamSpawns.red },
-            blue: { ...this.teamSpawns.blue }
-        });
     }
 
     generateMap() {
@@ -88,11 +82,6 @@ export class Map {
         // Update the instance variable directly
         this.teamSpawns.red = redSpawn;
         this.teamSpawns.blue = blueSpawn;
-
-        console.log('Team spawns calculated during map generation:', {
-            red: { ...redSpawn },
-            blue: { ...blueSpawn }
-        });
 
         // Connect spawn rooms to center
         this.generateHallway(redSpawnRoom, centerRoom, map);
@@ -291,13 +280,10 @@ export class Map {
     }
 
     getSpawnPoint(team) {
-        console.log(`Getting spawn point for team: ${team}`);
-        console.log('Current team spawns:', JSON.stringify(this.teamSpawns));
         
         if (team === 'red' || team === 'blue') {
             // Get the base spawn point for the team
             const spawnPoint = this.teamSpawns[team];
-            console.log(`Base spawn point for ${team} team:`, JSON.stringify(spawnPoint));
             
             // Add a small random offset within the spawn area (2 tiles in any direction)
             const offsetX = (Math.random() * 2 - 1) * this.tileSize * 2;
@@ -307,8 +293,7 @@ export class Map {
                 x: spawnPoint.x + offsetX,
                 y: spawnPoint.y + offsetY
             };
-            
-            console.log(`Final spawn position with offset:`, JSON.stringify(finalSpawn));
+
             return finalSpawn;
         }
         
@@ -317,7 +302,6 @@ export class Map {
             x: (this.tiles[0].length / 2) * this.tileSize,
             y: (this.tiles.length / 2) * this.tileSize
         };
-        console.log('Using center spawn point:', JSON.stringify(centerSpawn));
         return centerSpawn;
     }
 
@@ -457,7 +441,6 @@ export class Map {
             
             if (this.canPlaceRoom(roomX, roomY, roomWidth, roomHeight, map)) {
                 const bombSite = this.generateRoom(roomX, roomY, roomWidth, roomHeight, map);
-                console.log('Bomb site created at:', { x: roomX, y: roomY, width: roomWidth, height: roomHeight });
                 return bombSite;
             }
         }

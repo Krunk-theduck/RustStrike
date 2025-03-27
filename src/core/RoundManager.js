@@ -107,8 +107,7 @@ export class RoundManager {
                 matchHistory: [],
                 matchWinner: null
             });
-            
-            console.log('Initialized round data in Firebase');
+
         } catch (error) {
             console.error('Error initializing round data:', error);
         }
@@ -131,7 +130,7 @@ export class RoundManager {
                 this.stateEndTime === roundData.stateEndTime) {
                 return; // Skip if nothing meaningful has changed
             }
-            
+            let originalState = this.currentState;
             // Update local round state
             this.currentState = roundData.state;
             this.roundNumber = roundData.number;
@@ -155,8 +154,9 @@ export class RoundManager {
                 this.bombState = roundData.bombState;
             }
             
-            // Handle state change
-            this.handleStateChange(this.currentState);
+            if (originalState !== this.currentState) { 
+                this.handleStateChange(this.currentState);
+            }
             
             console.log(`Round state updated: ${this.currentState}`);
             
@@ -266,7 +266,6 @@ export class RoundManager {
             const bombCarrierId = snapshot.val();
             
             if (bombCarrierId) {
-                console.log('Bomb carrier updated via Firebase:', bombCarrierId);
                 
                 // Update the bomb carrier status for all players
                 this.game.players.forEach(player => {
@@ -279,7 +278,6 @@ export class RoundManager {
                         
                         // Update UI if this is the local player
                         if (this.game.localPlayer && player.id === this.game.localPlayer.id) {
-                            console.log('Local player is now the bomb carrier');
                             if (this.game.ui) {
                                 this.game.ui.showBombCarrierStatus(true);
                             }
@@ -318,10 +316,7 @@ export class RoundManager {
                 this.handleActivePhase();
                 break;
                 
-            case this.STATES.END:
-                // End of round - show results, prepare for next round
-                this.handleEndPhase();
-                break;
+            //End of round auto detected and handled on network
         }
         
         // If we're the host, set up the next state transition timer
@@ -351,7 +346,6 @@ export class RoundManager {
             this.game.ui.showNotification('Press B to open the buy menu', 'info');
         }
         
-        console.log('Prep phase started - movement locked, buy menu should show');
     }
     
     // Assign bomb to a random player on the red team
@@ -373,14 +367,12 @@ export class RoundManager {
         
         // Choose a random attacker to get the bomb
         const bombCarrier = attackers[Math.floor(Math.random() * attackers.length)];
-        console.log('Assigned bomb to player:', bombCarrier.id);
         
         // Set the hasBomb property
         bombCarrier.hasBomb = true;
         
         // If this is the local player, update the UI
         if (this.game.localPlayer && bombCarrier.id === this.game.localPlayer.id) {
-            console.log('Local player received the bomb');
             if (this.game.ui) {
                 this.game.ui.showBombCarrierStatus(true);
             }
@@ -395,7 +387,6 @@ export class RoundManager {
         try {
             // Check if we have access to the database and roomCode
             if (this.database && this.activeRoom) {
-                console.log('Syncing bomb assignment to player:', playerId);
                 
                 // Update the bomb carrier in the round data
                 const roomRef = this.database.ref(`rooms/${this.activeRoom}/round`);
@@ -416,7 +407,6 @@ export class RoundManager {
         // Hide buy menu (to be implemented)
         // this.game.ui.hideBuyMenu();
         
-        console.log('Active phase started - movement enabled, buy menu should hide');
     }
     
     // Handle end phase - show results, prepare for next round
@@ -507,45 +497,10 @@ export class RoundManager {
         if (!this.game.isHost) return;
         
         this.transitionToNextState(this.STATES.PREP);
-        console.log('First round started');
     }
     
     // Enhanced debug method to debug player status
     debugPlayerStatus() {
-        console.log("===== PLAYER STATUS DEBUG =====");
-        
-        // Check local player
-        const localPlayer = this.game.localPlayer;
-        if (localPlayer) {
-            console.log(`Local Player: ID=${localPlayer.id}, Team=${localPlayer.team}, Health=${localPlayer.health}, Alive=${localPlayer.isAlive}`);
-        } else {
-            console.log("No local player found!");
-        }
-        
-        // Check all remote players
-        console.log("Remote Players:");
-        let remoteCount = 0;
-        
-        this.game.players.forEach(player => {
-            if (player !== localPlayer) {
-                console.log(`- Player: ID=${player.id}, Team=${player.team}, Health=${player.health}, Alive=${player.isAlive}`);
-                remoteCount++;
-            }
-        });
-        
-        if (remoteCount === 0) {
-            console.log("No remote players found!");
-        }
-        
-        // Log team counts
-        const redCount = this.countAlivePlayers(this.TEAMS.ATTACKERS);
-        const blueCount = this.countAlivePlayers(this.TEAMS.DEFENDERS);
-        console.log(`Alive Players: Red=${redCount}, Blue=${blueCount}`);
-        
-        // Current round state
-        console.log(`Current round state: ${this.currentState}`);
-        
-        console.log("===============================");
     }
     
     // Update checkRoundWinConditions to use our debugging
@@ -627,14 +582,11 @@ export class RoundManager {
             }
         }
         
-        console.log(`Team ${team} has ${count} alive players: ${playerList.join(', ')}`);
         return count;
     }
     
     // Handle round end
     endRound(winningTeam, winCondition) {
-        // Only end the round if it's active
-        if (this.currentState !== this.STATES.ACTIVE) return null;
         
         console.log(`Round ended: ${winningTeam} won by ${winCondition}`);
         
@@ -860,8 +812,6 @@ export class RoundManager {
     
     // New method to award money to a player
     awardMoneyToPlayer(playerId, amount, reason) {
-        if (!this.game.isHost) return;
-        
         // Find player
         let player = null;
         if (this.game.localPlayer && this.game.localPlayer.id === playerId) {

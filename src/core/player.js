@@ -40,20 +40,16 @@ export class Player {
     }
 
     findSafeSpawnPosition(map) {
-        console.log(`Finding safe spawn position for player. Team: ${this.team}`);
         
         // If player has a team, use team spawn point
         if (this.team && (this.team === 'red' || this.team === 'blue')) {
             const spawnPoint = map.getSpawnPoint(this.team);
-            console.log(`Initial team spawn point:`, spawnPoint);
             
             // Check if spawn point is safe
             if (this.canMove(spawnPoint.x, spawnPoint.y, map)) {
-                console.log(`Initial spawn point is safe, using it:`, spawnPoint);
                 return spawnPoint;
             }
             
-            console.log(`Initial spawn point wasn't safe, trying spiral pattern...`);
             // If not safe, try nearby positions in a spiral pattern
             const maxRadius = 5;
             for (let radius = 1; radius <= maxRadius; radius++) {
@@ -63,15 +59,12 @@ export class Player {
                     
                     if (this.canMove(x, y, map)) {
                         const safeSpawn = { x, y };
-                        console.log(`Found safe spawn point in spiral:`, safeSpawn);
                         return safeSpawn;
                     }
                 }
             }
-            console.log(`No safe position found in spiral pattern`);
         }
 
-        console.log(`Falling back to random position search...`);
         // Fallback to random position if team spawn isn't available
         const maxAttempts = 100; // Prevent infinite loops
         let attempts = 0;
