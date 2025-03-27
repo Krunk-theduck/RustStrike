@@ -296,8 +296,6 @@ export class UIManager {
 
     // Show round end UI
     showRoundEnd(winningTeam, winCondition, teams, matchWinner) {
-        // Remove existing if present
-        this.hideRoundEnd();
         
         // Create round end screen
         const roundEnd = document.createElement('div');
@@ -524,12 +522,11 @@ export class UIManager {
         if (this.bombTimer.style.display == 'block' && show) return;
         
         if (show && explodeTime) {
+            this.bombTimer.style.backgroundColor = `rgba(255, 0, 0, 0.9)`;
             this.bombTimer.style.display = 'block';
             this.bombExplodeTime = explodeTime;
             
             this.bombTimer.textContent = `BOMB: ${this.timeLeft}s`;
-            this.bombTimer.style.backgroundColor = this.timeLeft % 2 === 0 ? 
-                        'rgba(255, 0, 0, 0.9)' : 'rgba(255, 255, 0, 0.9)';
         } else {
             this.bombTimer.style.display = 'none';
         }
