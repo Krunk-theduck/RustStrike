@@ -91,11 +91,9 @@ export class RoomManager {
             
             // Initialize map first so we can use it for spawn positions
             this.game.map = new window.GameMap();
-            console.log('Map generated, team spawns:', this.game.map.teamSpawns);
             
             // Find safe spawn position based on team
             const initialPosition = this.game.localPlayer.findSafeSpawnPosition(this.game.map);
-            console.log('Host spawn position:', initialPosition);
             
             const roomRef = this.database.ref(`rooms/${roomCode}`);
             const roomData = {
@@ -153,7 +151,6 @@ export class RoomManager {
             
             // Make sure we preserve the room data and decorations
             this.game.map.tiles = roomData.map;
-            console.log('Loaded map data, team spawns:', this.game.map.teamSpawns);
             
             // Count players and assign team
             let redCount = 0;
@@ -166,15 +163,12 @@ export class RoomManager {
                 });
             }
             
-            console.log('Current team counts - Red:', redCount, 'Blue:', blueCount);
             // Assign to team with fewer players
             this.game.localPlayer.team = redCount <= blueCount ? 'red' : 'blue';
             this.game.localPlayer.role = this.game.localPlayer.team === 'red' ? 'attacker' : 'defender';
-            console.log('Assigned to team:', this.game.localPlayer.team, 'Role:', this.game.localPlayer.role);
-            
+
             // Get spawn position from map based on team
             const spawnPos = this.game.map.getSpawnPoint(this.game.localPlayer.team);
-            console.log('Initial spawn position:', spawnPos);
 
             // Update player position
             this.game.localPlayer.x = spawnPos.x;
@@ -510,7 +504,6 @@ export class RoomManager {
             const player = this.game.players.get(playerId);
             
             if (player) {
-                console.log(`Player ${playerId} received the bomb via network event`);
                 player.hasBomb = true;
                 
                 // Update UI if this is the local player
