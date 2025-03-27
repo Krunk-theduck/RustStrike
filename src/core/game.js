@@ -388,10 +388,20 @@ export class Game {
         }
     }
 
+    updateBombTimerUI() {
+        this.ui.bombTimer.textContent = "BOMB: "+ this.timeLeft + "s";
+        if (this.timeLeft <= 10) {
+            this.ui.bombTimer.style.backgroundColor = this.timeLeft % 2 === 0 ? 
+                'rgba(255, 0, 0, 0.9)' : 'rgba(255, 255, 0, 0.9)';
+        }
+    }
+
     update(deltaTime) {
         try {
             // Add this line near the start of the update method
             this.updateBomb();
+            this.timeLeft = Math.max(0, Math.ceil((this.bombExplodeTime - Date.now()) / 1000));
+            this.updateBombTimerUI();
 
             // Only update player movement if not locked
             if (!this.lockPlayerMovement && this.localPlayer && this.localPlayer.isAlive) {
@@ -473,6 +483,8 @@ export class Game {
                     this.handleBombExplosion();
                 }
             }
+
+            this.ui.showBombCarrierStatus(this.localPlayer.hasBomb);
             
             // Check if player is near the bomb for UI indicator
             this.checkBombProximity();
@@ -899,11 +911,8 @@ export class Game {
         this.localPlayer.hasBomb = false;
         this.plantedBombPosition = { x: this.localPlayer.x, y: this.localPlayer.y };
         
-        // Only host sets the timer values directly to avoid conflicts
-        if (this.isHost) {
-            this.bombPlantedTime = Date.now();
-            this.bombExplodeTime = this.bombPlantedTime + this.BOMB_EXPLOSION_TIME;
-        }
+        this.bombPlantedTime = Date.now();
+        this.bombExplodeTime = this.bombPlantedTime + this.BOMB_EXPLOSION_TIME;
         
         // Update UI
         if (this.ui) {
@@ -927,11 +936,8 @@ export class Game {
                 plantedBy: this.localPlayer.id
             };
             
-            // Only host adds time values
-            if (this.isHost) {
-                bombUpdate.plantedTime = this.bombPlantedTime;
-                bombUpdate.explodeTime = this.bombExplodeTime;
-            }
+            bombUpdate.plantedTime = this.bombPlantedTime;
+            bombUpdate.explodeTime = this.bombExplodeTime;
             
             this.roomManager.database.ref(`rooms/${this.roomManager.activeRoom}/bomb`).update(bombUpdate);
             
@@ -958,8 +964,6 @@ export class Game {
         // Calculate time until explosion
         const BOMB_TIMER_DURATION = this.BOMB_EXPLOSION_TIME || 45000; // 45 seconds default
         
-        // Only the host should set the bomb timer to avoid conflicts
-        if (this.isHost) {
             // Set these values on host
             this.bombPlantedTime = Date.now();
             this.bombExplodeTime = this.bombPlantedTime + BOMB_TIMER_DURATION;
@@ -985,13 +989,6 @@ export class Game {
             
             // Also set the remaining time for the host
             this.bombExplodeTimeRemaining = BOMB_TIMER_DURATION / 1000; // Convert to seconds
-        } else {
-            // For client, we'll wait for the Firebase update to get the host values
-            // But we can preset the UI to avoid a flash of no timer
-            if (this.ui) {
-                this.ui.showBombTimer(true, Date.now() + BOMB_TIMER_DURATION);
-            }
-        }
     }
 
     // Start defusing the bomb
