@@ -347,27 +347,6 @@ export class UIManager {
                 'ATTACKERS WIN THE ROUND!' : 'DEFENDERS WIN THE ROUND!';
             
             roundEnd.appendChild(roundEndHeader);
-            
-            // Add win condition explanation
-            const winConditionText = document.createElement('h2');
-            winConditionText.style.cssText = `
-                font-size: 24px;
-                margin-bottom: 15px;
-                color: #cccccc;
-            `;
-            
-            // Map win condition to user-friendly text
-            let conditionText = 'All enemies eliminated';
-            if (winCondition === 'bomb_planted') {
-                conditionText = 'Bomb successfully detonated';
-            } else if (winCondition === 'bomb_defused') {
-                conditionText = 'Bomb successfully defused';
-            } else if (winCondition === 'time_expired') {
-                conditionText = 'Time ran out - Defenders win';
-            }
-            
-            winConditionText.innerHTML = `Win Condition: ${conditionText}`;
-            roundEnd.appendChild(winConditionText);
         }
         
         // Show team scores
@@ -431,6 +410,7 @@ export class UIManager {
             existingScreen.parentNode.removeChild(existingScreen);
         }
         this.roundEndScreen = null;
+        this.showingRoundEnd = true;
     }
 
     // Add a method to show/hide bomb indicator
