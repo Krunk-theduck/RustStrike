@@ -51,6 +51,104 @@ export class RoomManager {
         });
     }
 
+    async cleanUpRoom(roomCode) {
+        try {
+            // First, ensure we properly leave the current room
+            if (this.activeRoom) {
+                await this.leaveRoom();
+            }
+    
+            // Get reference to the specific room
+            const roomRef = this.database.ref(`rooms/${roomCode}`);
+    
+            // Remove the entire room from the database
+            await roomRef.remove();
+    
+            // Reset game state
+            if (this.game) {
+                this.returnToLobby();
+            }
+    
+            // Clear any room-specific intervals or listeners
+            if (this.hostPresenceInterval) {
+                clearInterval(this.hostPresenceInterval);
+                this.hostPresenceInterval = null;
+            }
+    
+            // Remove any remaining listeners
+            if (this.roomListeners.has(roomCode)) {
+                const playersRef = this.database.ref(`rooms/${roomCode}/players`);
+                playersRef.off('value', this.roomListeners.get(roomCode));
+                this.roomListeners.delete(roomCode);
+            }
+    
+            // Reset active room
+            this.activeRoom = null;
+    
+            console.log(`Room ${roomCode} has been cleaned up successfully`);
+        } catch (error) {
+            console.error('Error cleaning up room:', error);
+            throw error;
+        }
+    }
+    
+    // Method to return to lobby (to be implemented based on your specific UI/game structure)
+    returnToLobby() {
+        this.game.ui.showScreen('main');
+
+        this.stopRoomMonitoring();
+
+        this.game.ui.bombIndicator.style.display = 'none';
+        this.game.ui.bombTimer.style.display = 'none';
+        this.game.ui.showBombCarrierStatus(false);
+        this.game.stopGame();
+    }
+    
+    // Method to monitor and clean up abandoned rooms
+    async monitorRooms() {
+        try {
+            const roomsRef = this.database.ref('rooms');
+            
+            // Query for rooms that should be cleaned up or have inactive hosts
+            const abandonedRoomsQuery = roomsRef.orderByChild('shouldCleanup').equalTo(true);
+            const timedOutHostsQuery = roomsRef.orderByChild('hostLastOnline')
+                .endAt(Date.now() - 60000); // Rooms where host was last online more than a minute ago
+    
+            // Check abandoned rooms
+            const abandonedRoomsSnapshot = await abandonedRoomsQuery.once('value');
+            abandonedRoomsSnapshot.forEach((roomSnapshot) => {
+                const roomCode = roomSnapshot.key;
+                this.cleanUpRoom(roomCode);
+            });
+    
+            // Check rooms with timed-out hosts
+            const timedOutRoomsSnapshot = await timedOutHostsQuery.once('value');
+            timedOutRoomsSnapshot.forEach((roomSnapshot) => {
+                const roomCode = roomSnapshot.key;
+                this.cleanUpRoom(roomCode);
+            });
+        } catch (error) {
+            console.error('Error monitoring rooms:', error);
+        }
+    }
+    
+    // Set up periodic room monitoring
+    startRoomMonitoring() {
+        if (this.roomMonitorInterval) return;
+        // Check for abandoned rooms every minute
+        this.roomMonitorInterval = setInterval(() => {
+            this.monitorRooms();
+        }, 30000);
+    }
+    
+    // Method to stop room monitoring
+    stopRoomMonitoring() {
+        if (this.roomMonitorInterval) {
+            clearInterval(this.roomMonitorInterval);
+            this.roomMonitorInterval = null;
+        }
+    }
+
     monitorHostPresence(roomRef) {
         // Check for host timeout every 30 seconds
         const checkHostPresence = () => {
@@ -58,6 +156,7 @@ export class RoomManager {
                 if (snapshot.val() === true) {
                     // Host has disconnected, clean up the room
                     console.log('Host disconnected, cleaning up room');
+
                     this.leaveRoom();
                 }
             });
@@ -82,6 +181,7 @@ export class RoomManager {
     async createRoom(roomCode) {
         try {
             await this.leaveRoom();
+            this.stopRoomMonitoring();
 
             console.log('Creating new room, initializing host player...');
             // Assign team to host (default to red for host)
@@ -136,6 +236,7 @@ export class RoomManager {
     async joinRoom(roomCode) {
         try {
             await this.leaveRoom();
+            this.stopRoomMonitoring();
 
             console.log('Joining room:', roomCode);
             const roomRef = this.database.ref(`rooms/${roomCode}`);
@@ -268,48 +369,44 @@ export class RoomManager {
     }
 
     startPositionUpdates() {
-        const updatePosition = async () => {
-            if (!this.activeRoom || !this.game.localPlayer) return;
-
-            const now = Date.now();
-            if (now - this.lastUpdateTime < this.updateInterval) return;
-            this.lastUpdateTime = now;
-
-            try {
-                // Make sure the player and required data exist
-                if (!this.game.localPlayer) {
-                    console.warn('Local player is null, skipping position update');
-                    return;
-                }
-
+            const updatePosition = async () => {
+              if (!this.activeRoom || !this.game.localPlayer) return;
+        
+              const now = Date.now();
+              if (now - this.lastUpdateTime < this.updateInterval) return;
+              this.lastUpdateTime = now;
+        
+              try {
+        
                 const playerRef = this.database.ref(`rooms/${this.activeRoom}/players/${this.game.localPlayer.id}`);
-                
+        
                 // Use the normalized data structure that avoids circular references
                 const normalizedData = this.game.localPlayer.normalizeForSync();
-                
+        
                 await playerRef.update(normalizedData);
-
+        
                 // Update host position if we're the host
                 if (this.game.isHost) {
-                    await this.database.ref(`rooms/${this.activeRoom}/hostPosition`).set({
-                        x: this.game.localPlayer.x,
-                        y: this.game.localPlayer.y
-                    });
+                  await this.database.ref(`rooms/${this.activeRoom}/hostPosition`).set({
+                    x: this.game.localPlayer.x,
+                    y: this.game.localPlayer.y
+                  });
                 }
-            } catch (error) {
+              } catch (error) {
                 console.error('Failed to update player data:', error);
-            }
-        };
-
-        // Update position every frame
-        const update = () => {
-            if (this.activeRoom) {
+              }
+            };
+        
+            // Update position every frame
+            const update = () => {
+              // Add this check to ensure localPlayer still exists
+              if (this.activeRoom && this.game.localPlayer && this.game.isRunning) {
                 updatePosition();
                 requestAnimationFrame(update);
-            }
-        };
-        update();
-    }
+              }
+            };
+            update();
+          }
 
     listenToRoom(roomCode) {
         if (this.roomListeners.has(roomCode)) return;
@@ -440,6 +537,7 @@ export class RoomManager {
         if (!this.activeRoom) return;
 
         try {
+            this.startRoomMonitoring();
             // Clear the host presence interval if it exists
             if (this.hostPresenceInterval) {
                 clearInterval(this.hostPresenceInterval);
@@ -469,6 +567,7 @@ export class RoomManager {
 
             this.activeRoom = null;
             this.game.isRunning = false; // Make sure game loop stops
+            this.returnToLobby();
         } catch (error) {
             console.error('Error leaving room:', error);
         }
