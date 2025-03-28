@@ -29,13 +29,12 @@ export class Weapon {
         this.muzzleFlash = config.muzzleFlash || false;
     }
     
-    // Calculate time between shots in seconds
     get fireInterval() {
         return 1 / this.fireRate;
     }
     
     // Check if the weapon can fire (updated to use deltaTime logic)
-    canFire(now) {
+    canFire() {
         if (this.isReloading) return false;
         if (this.currentAmmo <= 0) return false;
         if (this.remainingCooldown > 0) return false;
