@@ -43,11 +43,27 @@
     <div id="room-join" class="screen hidden">
         <div class="menu-container">
             <h2>Join Room</h2>
-            <form id="join-room-form">
-                <input type="text" id="room-code" placeholder="Enter Room Code" 
-                       maxlength="6" pattern="[A-Za-z0-9]{6}" required>
-                <button type="submit">Join</button>
-            </form>
+
+            <div class="join-options">
+                <button id="join-by-code-tab" class="join-option-button active">Join by Code</button>
+                <button id="browse-rooms-tab" class="join-option-button">Browse Rooms</button>
+            </div>
+
+            <div id="join-by-code-section">
+                <form id="join-room-form">
+                    <input type="text" id="room-code" placeholder="Enter Room Code"
+                           maxlength="6" pattern="[A-Za-z0-9]{6}" required>
+                    <button type="submit">Join</button>
+                </form>
+            </div>
+
+            <div id="browse-rooms-section" class="hidden">
+                <h3>Available Rooms</h3>
+                <div id="room-list">
+                    <p>Loading rooms...</p> </div>
+                <button id="refresh-rooms" class="menu-button small">Refresh Rooms</button>
+            </div>
+
             <button class="back-button">Back</button>
         </div>
     </div>
