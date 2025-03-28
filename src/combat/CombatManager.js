@@ -363,17 +363,37 @@ export class CombatManager {
         this.shoot();
     }
     
+    addShotgunBlastEffect(x, y, angle) {
+        // Create a cone effect for shotgun blast
+        const count = 8;
+        const spread = 0.4; // Wide cone for visual effect
+        
+        for (let i = 0; i < count; i++) {
+            const particleAngle = angle + (Math.random() - 0.5) * spread;
+            const distance = 20 + Math.random() * 15; // Short particle trails
+            
+            this.addBulletTrail(
+                x, 
+                y, 
+                x + Math.cos(particleAngle) * distance, 
+                y + Math.sin(particleAngle) * distance,
+                'rgba(255, 200, 50, 0.7)' // Orange-yellow muzzle flash color
+            );
+        }
+    }
+
+    // Handle shooting
     // Handle shooting
     shoot() {
         const player = this.game.localPlayer;
         if (!player || !player.isAlive || !player.equipment || player.equipment.length === 0) return;
-        
+
         const weapon = player.equipment[player.activeWeaponIndex];
         if (!weapon) return;
-        
+
         const now = Date.now();
         if (!weapon.canFire(now)) return;
-        
+
         // Fire the weapon
         if (weapon.fire(now)) {
             // Determine if this is a shotgun
@@ -385,53 +405,60 @@ export class CombatManager {
 
             for (let i = 0; i < pelletCount; i++) {
                 let bulletAngle = weapon.calculateBulletTrajectory(player.aim.angle);
-                
+
                 if (isShotgun) {
                     const shotgunSpread = 0.2;
                     bulletAngle += (Math.random() - 0.5) * shotgunSpread;
                 }
-                
+
                 // Raycast to find hit
                 const hit = this.raycastBullet(
-                    player.x, 
-                    player.y, 
-                    bulletAngle, 
+                    player.x,
+                    player.y,
+                    bulletAngle,
                     weapon.range,
                     player.id
                 );
-                
-                // Add bullet trail effect
+
+                // Add bullet trail effect (for local player)
                 this.addBulletTrail(
-                    player.x, 
-                    player.y, 
-                    hit.x, 
-                    hit.y, 
+                    player.x,
+                    player.y,
+                    hit.x,
+                    hit.y,
                     weapon.bulletTrailColor
                 );
-                
+
+                // **Store the shot trail in the database for other players**
+                this.storeShotTrail(
+                    player.x,
+                    player.y,
+                    hit.x,
+                    hit.y,
+                    weapon.bulletTrailColor
+                );
+
                 // Apply damage if we hit a player
                 if (hit.playerId) {
-                    // Calculate per-pellet damage for shotguns
                     let damage = weapon.calculateDamage(Math.sqrt(
-                        Math.pow(hit.x - player.x, 2) + 
+                        Math.pow(hit.x - player.x, 2) +
                         Math.pow(hit.y - player.y, 2)
                     ));
-                    
-                    // For shotguns, divide the damage by pellet count unless specified otherwise
+
                     if (isShotgun && !weapon.fullDamagePerPellet) {
                         damage = damage / pelletCount;
                     }
-                    
+
                     this.applyDamage(hit.playerId, damage, player.id);
-                    
+
                     // Add hit marker effect
                     this.addHitMarker(hit.x, hit.y);
                 }
             }
-            
+
             return true;
         }
-        
+
         return false;
     }
 
