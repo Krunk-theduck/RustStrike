@@ -14,7 +14,7 @@ export class RoundManager {
         
         // Timer constants (in milliseconds)
         this.TIMER = {
-            PREP: 10000,          // 10 seconds prep phase
+            PREP: 15000,          // 10 seconds prep phase
             ACTIVE: 120000,       // 2 minutes active phase
             END: 5000,            // 5 seconds end phase
             PLANT: 3000,          // 3 seconds to plant
@@ -711,6 +711,9 @@ export class RoundManager {
             console.error('Cannot show round end UI - game or UI manager not available');
             return;
         }
+
+        if (this.showingRoundEnd) { return }
+        this.showingRoundEnd = true;
         
         // Format teams object to include both attackers/defenders and red/blue references
         const formattedTeams = {
@@ -773,8 +776,6 @@ export class RoundManager {
     
     // New method to award money at round start
     awardRoundStartMoney() {
-        if (!this.game.isHost) return;
-        
         // Add a flag to prevent multiple calls in the same round
         if (this._roundStartMoneyAwarded) return;
         this._roundStartMoneyAwarded = true;
@@ -784,29 +785,18 @@ export class RoundManager {
         if (this.matchHistory && this.matchHistory.length > 0) {
             lastRoundWinner = this.matchHistory[this.matchHistory.length - 1].winner;
         }
-        
-        // Process for all players
-        this.game.players.forEach(player => {
-            // Base round money
-            this.awardMoneyToPlayer(player.id, 100, "Round Start");
-            
-            // Winning team bonus
-            if (lastRoundWinner && player.team === lastRoundWinner) {
-                this.awardMoneyToPlayer(player.id, 800, "Round Win Bonus");
-            }
-        });
-        
+
         // Also process for local player
         if (this.game.localPlayer) {
             // Base round money
-            this.awardMoneyToPlayer(this.game.localPlayer.id, 100, "Round Start");
+            this.awardMoneyToPlayer(this.game.localPlayer.id, 400, "Round Start");
             
             // Winning team bonus
             if (lastRoundWinner && this.game.localPlayer.team === lastRoundWinner) {
                 this.awardMoneyToPlayer(this.game.localPlayer.id, 800, "Round Win Bonus");
             }
         }
-        
+
         console.log("Round start money awarded");
     }
     
