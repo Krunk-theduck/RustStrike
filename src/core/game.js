@@ -41,6 +41,7 @@ export class Game {
         
         this.setupCanvas();
         this.roomManager = new RoomManager(this);
+        this.roomManager.startRoomMonitoring();
         this.roundManager = new RoundManager(this);
     }
 
@@ -187,7 +188,7 @@ export class Game {
         try {
             // Initialize game state
             this.init();
-
+            this.isRunning = true;
             // Setup multiplayer
             if (isHost) {
                 await this.roomManager.createRoom(roomCode);
@@ -211,7 +212,6 @@ export class Game {
                 }, 3000); // Give players 3 seconds to join
             }
 
-            this.isRunning = true;
             this.gameLoop();
         } catch (error) {
             console.error('Failed to start game:', error);
@@ -233,10 +233,6 @@ export class Game {
         
         if (this.roundManager) {
             this.roundManager.cleanUp();
-        }
-        
-        if (this.roomManager) {
-            this.roomManager.leaveRoom();
         }
         
         // Reset the game state
