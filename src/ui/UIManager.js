@@ -42,6 +42,23 @@ export class UIManager {
                 this.game.roundManager.matchHistory
             );
         }
+
+        const roomJoinScreen = this.screens['roomJoin'];
+        if (screenName === 'roomJoin' && roomJoinScreen && !roomJoinScreen.classList.contains('hidden')) {
+            // Ensure the "Browse Rooms" tab is active and section is visible on initial load of this screen
+            const joinByCodeTab = document.getElementById('join-by-code-tab');
+            const browseRoomsTab = document.getElementById('browse-rooms-tab');
+            const joinByCodeSection = document.getElementById('join-by-code-section');
+            const browseRoomsSection = document.getElementById('browse-rooms-section');
+
+            if (joinByCodeTab && browseRoomsTab && joinByCodeSection && browseRoomsSection) {
+                browseRoomsTab.classList.add('active');
+                joinByCodeTab.classList.remove('active');
+                browseRoomsSection.classList.remove('hidden');
+                joinByCodeSection.classList.add('hidden');
+                this.populateRoomList(); // Initial population when showing the room join screen
+            }
+        }
     }
 
     init() {
@@ -92,8 +109,97 @@ export class UIManager {
                 if (this.currentScreen === 'game') {
                     // If we're in game, properly leave the room first
                     await this.game.roomManager.leaveRoom();
+                } else if (this.currentScreen == "roomJoin" || this.currentScreen == "settings") {
+                    this.showScreen('main');
                 }
-                this.showScreen('main');
+            });
+        });
+
+        document.getElementById('join-game').addEventListener('click', () => {
+            this.showScreen('roomJoin');
+            this.populateRoomList(); // Populate the room list when the join screen is shown
+        });
+
+        // Event listeners for the new room browser elements
+        const joinByCodeTab = document.getElementById('join-by-code-tab');
+        const browseRoomsTab = document.getElementById('browse-rooms-tab');
+        const joinByCodeSection = document.getElementById('join-by-code-section');
+        const browseRoomsSection = document.getElementById('browse-rooms-section');
+        const refreshRoomsButton = document.getElementById('refresh-rooms');
+
+        if (joinByCodeTab && browseRoomsTab && joinByCodeSection && browseRoomsSection && refreshRoomsButton) {
+            joinByCodeTab.addEventListener('click', () => {
+                // Initially clean up rooms that need it
+                this.game.roomManager.monitorRooms();
+                joinByCodeTab.classList.add('active');
+                browseRoomsTab.classList.remove('active');
+                joinByCodeSection.classList.remove('hidden');
+                browseRoomsSection.classList.add('hidden');
+            });
+
+            browseRoomsTab.addEventListener('click', () => {
+                browseRoomsTab.classList.add('active');
+                joinByCodeTab.classList.remove('active');
+                browseRoomsSection.classList.remove('hidden');
+                joinByCodeSection.classList.add('hidden');
+                this.populateRoomList(); // Populate when the tab is clicked
+            });
+
+            refreshRoomsButton.addEventListener('click', () => {
+                this.populateRoomList();
+            });
+        }
+    }
+
+    async populateRoomList() {
+        const roomListDiv = document.getElementById('room-list');
+        if (!roomListDiv) return;
+
+        roomListDiv.innerHTML = '<p>Loading rooms...</p>'; // Reset loading message
+
+        try {
+            const roomsRef = this.game.roomManager.database.ref('rooms');
+            const snapshot = await roomsRef.once('value');
+            const roomsData = snapshot.val();
+
+            if (roomsData) {
+                roomListDiv.innerHTML = ''; // Clear the loading message
+
+                Object.keys(roomsData).forEach(roomCode => {
+                    const room = roomsData[roomCode];
+                    const playerCount = room.players ? Object.keys(room.players).length : 0;
+                    const hostId = room.hostId || 'N/A'; // Assuming 'hostId' is stored in the room data
+
+                    const roomItem = document.createElement('div');
+                    roomItem.classList.add('room-item');
+                    roomItem.innerHTML = `
+                        <span>Room: ${roomCode} (Players: ${playerCount})<br>Host: ${hostId}</span>
+                        <button class="join-room-button" data-room-code="${roomCode}">Join</button>
+                    `;
+                    roomListDiv.appendChild(roomItem);
+                });
+
+                // Add event listeners to the dynamically created join buttons
+                this.attachJoinRoomListeners();
+
+            } else {
+                roomListDiv.innerHTML = '<p>No rooms available.</p>';
+            }
+
+        } catch (error) {
+            console.error('Error fetching rooms:', error);
+            roomListDiv.innerHTML = '<p>Error loading rooms.</p>';
+        }
+    }
+
+    attachJoinRoomListeners() {
+        const joinButtons = document.querySelectorAll('.join-room-button');
+        joinButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                const roomCode = button.getAttribute('data-room-code');
+                if (roomCode) {
+                    this.joinRoom(roomCode); // Assuming 'this.joinRoom' function exists
+                }
             });
         });
     }
