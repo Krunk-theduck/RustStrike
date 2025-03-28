@@ -304,6 +304,14 @@ export class CombatManager {
     
     // Update method called every frame
     update(deltaTime = 1/60) {
+        const currentTime = performance.now();
+        this.deltaTime = (currentTime - (this.lastFrameTime || currentTime)) / 1000; // Convert to seconds
+        this.lastFrameTime = currentTime;
+        
+        // Limit deltaTime to prevent huge jumps after tab switch or lag
+        this.deltaTime = Math.min(this.deltaTime, 0.1);
+        deltaTime = this.deltaTime;
+
         // Update bullet trails and hit markers
         this.updateVisualEffects(deltaTime);
         
