@@ -299,6 +299,7 @@ export class RoundManager {
         // Reset the round start money flag when transitioning to a new state
         if (newState !== this.STATES.PREP) {
             this._roundStartMoneyAwarded = false;
+            this.showingRoundEnd = false;
         }
         
         switch (newState) {
