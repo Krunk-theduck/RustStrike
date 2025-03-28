@@ -261,3 +261,83 @@ body {
     color: #fff;
     margin-bottom: 10px;
 } 
+
+.join-options {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 1rem;
+    justify-content: center;
+}
+
+.join-option-button {
+    padding: 0.7rem 1.5rem;
+    background: #333;
+    border: none;
+    border-radius: 5px;
+    color: white;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+
+.join-option-button.active {
+    background: #555;
+}
+
+.join-option-button:hover {
+    background: #555;
+}
+
+#browse-rooms-section h3 {
+    margin-top: 0;
+    margin-bottom: 0.5rem;
+    text-align: center;
+}
+
+#room-list {
+    max-height: 200px;
+    overflow-y: auto;
+    margin-bottom: 1rem;
+    padding: 0.5rem;
+    border: 1px solid #555;
+    border-radius: 5px;
+    text-align: left;
+}
+
+#room-list p {
+    margin: 0.5rem;
+}
+
+.room-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem;
+    margin-bottom: 0.3rem;
+    background-color: #222;
+    border-radius: 3px;
+}
+
+.room-item span {
+    flex-grow: 1;
+}
+
+.room-item button {
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    padding: 0.3rem 0.6rem;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 0.9rem;
+}
+
+.room-item button:hover {
+    background-color: #45a049;
+}
+
+.menu-button.small {
+    width: auto;
+    padding: 0.5rem 1rem;
+    margin: 0 auto 1rem auto; /* Keep it centered */
+    display: block;
+}
